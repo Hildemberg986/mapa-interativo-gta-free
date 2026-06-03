@@ -18,7 +18,7 @@ const activePointerId = ref(null)
 const pointerCoords = ref({ x: null, y: null })
 const pins = ref([])
 
-const mapStyle = computed(() => ({
+const mapLayerStyle = computed(() => ({
   transform: `translate(${offset.value.x}px, ${offset.value.y}px) scale(${zoom.value})`,
 }))
 
@@ -103,11 +103,18 @@ function getPinStyle(pin) {
   }
 }
 
+function normalizeText(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 function normalizePin(pin, index) {
+  const normalizedIcon = normalizeText(pin?.icon)
+  const normalizedImageUrl = normalizeText(pin?.image_url)
+
   return {
     id: pin?.id ?? `pin-${index}`,
-    icon: pin?.icon ?? '',
-    image_url: pin?.image_url ?? '',
+    icon: normalizedIcon,
+    image_url: normalizedImageUrl,
     cord_x: Number(pin?.cord_x),
     cord_y: Number(pin?.cord_y),
     color_pin: pin?.color_pin ?? '#000000',
@@ -118,16 +125,24 @@ async function loadPins() {
   try {
     const response = await fetch('/pins/tags.json')
     if (!response.ok) {
+      console.error(`Falha ao carregar pins: ${response.status} ${response.statusText}`)
       pins.value = []
       return
     }
 
     const data = await response.json()
-    const rawPins = Array.isArray(data) ? data : Array.isArray(data?.pins) ? data.pins : []
+    let rawPins = []
+    if (Array.isArray(data)) {
+      rawPins = data
+    } else if (Array.isArray(data?.pins)) {
+      rawPins = data.pins
+    }
+
     pins.value = rawPins
       .map(normalizePin)
       .filter((pin) => Number.isFinite(pin.cord_x) && Number.isFinite(pin.cord_y))
-  } catch {
+  } catch (error) {
+    console.error('Falha ao processar pins em /pins/tags.json', error)
     pins.value = []
   }
 }
@@ -286,7 +301,7 @@ onUnmounted(() => {
       @pointercancel="onPointerCancel"
       @pointerleave="onMouseLeave"
     >
-      <div class="map-layer" :style="mapStyle">
+      <div class="map-layer" :style="mapLayerStyle">
         <img
           class="home-image"
           :src="mapaGta"
@@ -303,13 +318,13 @@ onUnmounted(() => {
           :title="`Pin ${pin.id}`"
         >
           <img
-            v-if="pin.image_url && !pin.icon"
+            v-if="pin.image_url && pin.icon === ''"
             class="map-pin__icon-image"
             :src="pin.image_url"
             alt=""
             aria-hidden="true"
           />
-          <span v-else class="map-pin__icon">{{ pin.icon }}</span>
+          <span v-else class="map-pin__icon" aria-hidden="true">{{ pin.icon || '•' }}</span>
         </div>
       </div>
     </section>
