@@ -123,7 +123,7 @@ function onMouseLeave() {
 
 function setZoom(nextZoom) {
   const clampedZoom = Math.min(Math.max(nextZoom, MIN_ZOOM), MAX_ZOOM)
-  if (clampedZoom === zoom.value || !viewportRef.value) {
+  if (!viewportRef.value) {
     return
   }
 
@@ -239,7 +239,8 @@ onUnmounted(() => {
 .map-viewport {
   position: relative;
   width: 100%;
-  height: calc(100vh - 4.25rem);
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
   border: 6px solid #2f8fbd;
   border-radius: 0.35rem;
