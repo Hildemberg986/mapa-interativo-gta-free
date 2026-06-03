@@ -215,6 +215,7 @@ function getZoomStepWithModifiers(event) {
 }
 
 function onViewportWheel(event) {
+  event.preventDefault()
   const direction = event.deltaY < 0 ? 1 : -1
   const zoomStep = getZoomStepWithModifiers(event)
   setZoom(zoom.value + direction * zoomStep)
