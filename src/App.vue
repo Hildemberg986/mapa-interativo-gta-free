@@ -16,8 +16,9 @@ const dragStartPoint = ref({ x: 0, y: 0 })
 const dragStartOffset = ref({ x: 0, y: 0 })
 const activePointerId = ref(null)
 const pointerCoords = ref({ x: null, y: null })
+const pins = ref([])
 
-const mapStyle = computed(() => ({
+const mapLayerStyle = computed(() => ({
   transform: `translate(${offset.value.x}px, ${offset.value.y}px) scale(${zoom.value})`,
 }))
 
@@ -92,6 +93,58 @@ function onImageLoad(event) {
     height: event.target.naturalHeight,
   }
   refreshViewportSize()
+}
+
+function getPinStyle(pin) {
+  return {
+    left: `${pin.cord_x}px`,
+    top: `${pin.cord_y}px`,
+    backgroundColor: pin.color_pin || '#000000',
+  }
+}
+
+function normalizeText(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function normalizePin(pin, index) {
+  const normalizedIcon = normalizeText(pin?.icon)
+  const normalizedImageUrl = normalizeText(pin?.image_url)
+
+  return {
+    id: pin?.id ?? `pin-${index}`,
+    icon: normalizedIcon,
+    image_url: normalizedImageUrl,
+    cord_x: Number(pin?.cord_x),
+    cord_y: Number(pin?.cord_y),
+    color_pin: pin?.color_pin ?? '#000000',
+  }
+}
+
+async function loadPins() {
+  try {
+    const response = await fetch('/pins/tags.json')
+    if (!response.ok) {
+      console.error(`Falha ao carregar pins: ${response.status} ${response.statusText}`)
+      pins.value = []
+      return
+    }
+
+    const data = await response.json()
+    let rawPins = []
+    if (Array.isArray(data)) {
+      rawPins = data
+    } else if (Array.isArray(data?.pins)) {
+      rawPins = data.pins
+    }
+
+    pins.value = rawPins
+      .map(normalizePin)
+      .filter((pin) => Number.isFinite(pin.cord_x) && Number.isFinite(pin.cord_y))
+  } catch (error) {
+    console.error('Falha ao processar pins em /pins/tags.json', error)
+    pins.value = []
+  }
 }
 
 function onPointerDown(event) {
@@ -203,6 +256,7 @@ function onViewportKeydown(event) {
 onMounted(() => {
   refreshViewportSize()
   window.addEventListener('resize', refreshViewportSize)
+  loadPins()
 })
 
 onUnmounted(() => {
@@ -247,14 +301,32 @@ onUnmounted(() => {
       @pointercancel="onPointerCancel"
       @pointerleave="onMouseLeave"
     >
-      <img
-        class="home-image"
-        :style="mapStyle"
-        :src="mapaGta"
-        alt="Mapa interativo GTA"
-        draggable="false"
-        @load="onImageLoad"
-      />
+      <div class="map-layer" :style="mapLayerStyle">
+        <img
+          class="home-image"
+          :src="mapaGta"
+          alt="Mapa interativo GTA"
+          draggable="false"
+          @load="onImageLoad"
+        />
+
+        <div
+          v-for="pin in pins"
+          :key="pin.id"
+          class="map-pin"
+          :style="getPinStyle(pin)"
+          :title="`Pin ${pin.id}`"
+        >
+          <img
+            v-if="pin.image_url && pin.icon === ''"
+            class="map-pin__icon-image"
+            :src="pin.image_url"
+            alt=""
+            aria-hidden="true"
+          />
+          <span v-else class="map-pin__icon" aria-hidden="true">{{ pin.icon || '•' }}</span>
+        </div>
+      </div>
     </section>
   </main>
 </template>
@@ -327,8 +399,44 @@ onUnmounted(() => {
   max-width: none;
   height: auto;
   display: block;
-  transform-origin: top left;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+.map-layer {
+  position: relative;
+  display: inline-block;
+  transform-origin: top left;
+}
+
+.map-pin {
+  position: absolute;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50% 50% 50% 0;
+  transform: translate(-50%, -100%) rotate(-45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.map-pin__icon,
+.map-pin__icon-image {
+  transform: rotate(45deg);
+}
+
+.map-pin__icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.map-pin__icon-image {
+  width: 1rem;
+  height: 1rem;
+  object-fit: cover;
+  border-radius: 999px;
 }
 </style>
