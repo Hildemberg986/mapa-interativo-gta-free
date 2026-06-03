@@ -14,6 +14,7 @@ const offset = ref({ x: 0, y: 0 })
 const isDragging = ref(false)
 const dragStartPoint = ref({ x: 0, y: 0 })
 const dragStartOffset = ref({ x: 0, y: 0 })
+const activePointerId = ref(null)
 const pointerCoords = ref({ x: null, y: null })
 
 const mapStyle = computed(() => ({
@@ -91,14 +92,22 @@ function onImageLoad(event) {
   refreshViewportSize()
 }
 
-function onMouseDown(event) {
+function onPointerDown(event) {
+  if (event.button !== 0) {
+    return
+  }
+
   isDragging.value = true
+  activePointerId.value = event.pointerId
   dragStartPoint.value = { x: event.clientX, y: event.clientY }
   dragStartOffset.value = { ...offset.value }
+  viewportRef.value?.setPointerCapture(event.pointerId)
 }
 
-function onMouseMove(event) {
-  if (!isDragging.value) {
+function onPointerMove(event) {
+  updatePointerCoords(event)
+
+  if (!isDragging.value || event.pointerId !== activePointerId.value) {
     return
   }
 
@@ -109,10 +118,29 @@ function onMouseMove(event) {
     x: dragStartOffset.value.x + deltaX,
     y: dragStartOffset.value.y + deltaY,
   })
+  event.preventDefault()
 }
 
-function onMouseUp() {
+function stopDragging() {
   isDragging.value = false
+  activePointerId.value = null
+}
+
+function onPointerUp(event) {
+  if (event.pointerId !== activePointerId.value) {
+    return
+  }
+
+  viewportRef.value?.releasePointerCapture(event.pointerId)
+  stopDragging()
+}
+
+function onPointerCancel(event) {
+  if (event.pointerId !== activePointerId.value) {
+    return
+  }
+
+  stopDragging()
 }
 
 function onMouseLeave() {
@@ -145,17 +173,38 @@ function zoomOut() {
   setZoom(zoom.value - ZOOM_STEP)
 }
 
+function moveByKeyboard(deltaX, deltaY) {
+  offset.value = clampOffset({
+    x: offset.value.x + deltaX,
+    y: offset.value.y + deltaY,
+  })
+}
+
+function onViewportKeydown(event) {
+  const step = 30
+
+  if (event.key === 'ArrowLeft') {
+    moveByKeyboard(step, 0)
+    event.preventDefault()
+  } else if (event.key === 'ArrowRight') {
+    moveByKeyboard(-step, 0)
+    event.preventDefault()
+  } else if (event.key === 'ArrowUp') {
+    moveByKeyboard(0, step)
+    event.preventDefault()
+  } else if (event.key === 'ArrowDown') {
+    moveByKeyboard(0, -step)
+    event.preventDefault()
+  }
+}
+
 onMounted(() => {
   refreshViewportSize()
   window.addEventListener('resize', refreshViewportSize)
-  window.addEventListener('mousemove', onMouseMove)
-  window.addEventListener('mouseup', onMouseUp)
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', refreshViewportSize)
-  window.removeEventListener('mousemove', onMouseMove)
-  window.removeEventListener('mouseup', onMouseUp)
 })
 </script>
 
@@ -163,8 +212,22 @@ onUnmounted(() => {
   <main class="home">
     <div class="hud">
       <div class="zoom-controls">
-        <button type="button" @click="zoomOut" :disabled="zoom <= MIN_ZOOM">-</button>
-        <button type="button" @click="zoomIn" :disabled="zoom >= MAX_ZOOM">+</button>
+        <button
+          type="button"
+          aria-label="Diminuir zoom"
+          @click="zoomOut"
+          :disabled="zoom <= MIN_ZOOM"
+        >
+          -
+        </button>
+        <button
+          type="button"
+          aria-label="Aumentar zoom"
+          @click="zoomIn"
+          :disabled="zoom >= MAX_ZOOM"
+        >
+          +
+        </button>
       </div>
       <p class="coords">{{ coordLabel }}</p>
     </div>
@@ -172,9 +235,14 @@ onUnmounted(() => {
     <section
       ref="viewportRef"
       class="map-viewport"
-      @mousedown.left="onMouseDown"
-      @mousemove="updatePointerCoords"
-      @mouseleave="onMouseLeave"
+      :class="{ 'is-dragging': isDragging }"
+      tabindex="0"
+      @keydown="onViewportKeydown"
+      @pointerdown="onPointerDown"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointercancel="onPointerCancel"
+      @pointerleave="onMouseLeave"
     >
       <img
         class="home-image"
@@ -244,9 +312,10 @@ onUnmounted(() => {
   border-radius: 0.35rem;
   background: #2f8fbd;
   cursor: grab;
+  touch-action: none;
 }
 
-.map-viewport:active {
+.map-viewport.is-dragging {
   cursor: grabbing;
 }
 
