@@ -98,8 +98,6 @@ function onMouseDown(event) {
 }
 
 function onMouseMove(event) {
-  updatePointerCoords(event)
-
   if (!isDragging.value) {
     return
   }
