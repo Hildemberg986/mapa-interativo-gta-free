@@ -59,7 +59,9 @@ function refreshViewportSize() {
     height: viewportRef.value.clientHeight,
   }
 
-  offset.value = clampOffset(offset.value)
+  if (mapNaturalSize.value.width && mapNaturalSize.value.height) {
+    offset.value = clampOffset(offset.value)
+  }
 }
 
 function updatePointerCoords(event) {
@@ -148,11 +150,11 @@ function onMouseLeave() {
 }
 
 function setZoom(nextZoom) {
-  const clampedZoom = Math.min(Math.max(nextZoom, MIN_ZOOM), MAX_ZOOM)
   if (!viewportRef.value) {
     return
   }
 
+  const clampedZoom = Math.min(Math.max(nextZoom, MIN_ZOOM), MAX_ZOOM)
   const centerX = viewportSize.value.width / 2
   const centerY = viewportSize.value.height / 2
   const worldX = (centerX - offset.value.x) / zoom.value
@@ -236,6 +238,7 @@ onUnmounted(() => {
       ref="viewportRef"
       class="map-viewport"
       :class="{ 'is-dragging': isDragging }"
+      aria-label="Área do mapa interativo"
       tabindex="0"
       @keydown="onViewportKeydown"
       @pointerdown="onPointerDown"
