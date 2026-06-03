@@ -2,9 +2,9 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import mapaGta from './assets/mapa-gta.webp'
 
-const MIN_ZOOM = 1
-const MAX_ZOOM = 3
-const ZOOM_STEP = 0.2
+const MIN_ZOOM = 0.2
+const MAX_ZOOM = 8
+const ZOOM_STEP = 0.15
 
 const viewportRef = ref(null)
 const mapNaturalSize = ref({ width: 0, height: 0 })
@@ -92,6 +92,7 @@ function onImageLoad(event) {
     height: event.target.naturalHeight,
   }
   refreshViewportSize()
+  applyInitialZoom()
 }
 
 function onPointerDown(event) {
@@ -167,12 +168,56 @@ function setZoom(nextZoom) {
   })
 }
 
+function applyInitialZoom() {
+  if (
+    !viewportSize.value.width ||
+    !viewportSize.value.height ||
+    !mapNaturalSize.value.width ||
+    !mapNaturalSize.value.height
+  ) {
+    return
+  }
+
+  const fitZoom = Math.min(
+    viewportSize.value.width / mapNaturalSize.value.width,
+    viewportSize.value.height / mapNaturalSize.value.height,
+  )
+
+  zoom.value = Math.min(Math.max(fitZoom, MIN_ZOOM), MAX_ZOOM)
+  offset.value = clampOffset({
+    x: (viewportSize.value.width - mapNaturalSize.value.width * zoom.value) / 2,
+    y: (viewportSize.value.height - mapNaturalSize.value.height * zoom.value) / 2,
+  })
+}
+
 function zoomIn() {
   setZoom(zoom.value + ZOOM_STEP)
 }
 
 function zoomOut() {
   setZoom(zoom.value - ZOOM_STEP)
+}
+
+function getZoomStepWithModifiers(event) {
+  if (event.shiftKey) {
+    return ZOOM_STEP * 2
+  }
+
+  if (event.ctrlKey || event.metaKey) {
+    return ZOOM_STEP * 0.8
+  }
+
+  if (event.altKey) {
+    return ZOOM_STEP * 0.5
+  }
+
+  return ZOOM_STEP
+}
+
+function onViewportWheel(event) {
+  const direction = event.deltaY < 0 ? 1 : -1
+  const zoomStep = getZoomStepWithModifiers(event)
+  setZoom(zoom.value + direction * zoomStep)
 }
 
 function moveByKeyboard(deltaX, deltaY) {
@@ -213,24 +258,6 @@ onUnmounted(() => {
 <template>
   <main class="home">
     <div class="hud">
-      <div class="zoom-controls">
-        <button
-          type="button"
-          aria-label="Diminuir zoom"
-          @click="zoomOut"
-          :disabled="zoom <= MIN_ZOOM"
-        >
-          -
-        </button>
-        <button
-          type="button"
-          aria-label="Aumentar zoom"
-          @click="zoomIn"
-          :disabled="zoom >= MAX_ZOOM"
-        >
-          +
-        </button>
-      </div>
       <p class="coords">{{ coordLabel }}</p>
     </div>
 
@@ -246,6 +273,7 @@ onUnmounted(() => {
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
       @pointerleave="onMouseLeave"
+      @wheel.prevent="onViewportWheel"
     >
       <img
         class="home-image"
@@ -256,6 +284,25 @@ onUnmounted(() => {
         @load="onImageLoad"
       />
     </section>
+
+    <div class="zoom-controls">
+      <button
+        type="button"
+        aria-label="Diminuir zoom"
+        @click="zoomOut"
+        :disabled="zoom <= MIN_ZOOM"
+      >
+        -
+      </button>
+      <button
+        type="button"
+        aria-label="Aumentar zoom"
+        @click="zoomIn"
+        :disabled="zoom >= MAX_ZOOM"
+      >
+        +
+      </button>
+    </div>
   </main>
 </template>
 
@@ -273,24 +320,34 @@ onUnmounted(() => {
 
 .hud {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: 0.75rem;
   color: #ffffff;
 }
 
 .zoom-controls {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
   display: flex;
+  flex-direction: column;
   gap: 0.35rem;
+  padding: 0.35rem;
+  border-radius: 0.5rem;
+  background: #000000;
+  z-index: 10;
 }
 
 .zoom-controls button {
-  border: 0;
+  border: 1px solid #ffffff;
   border-radius: 0.35rem;
   width: 2.2rem;
   height: 2rem;
-  font-size: 1.1rem;
-  background: rgba(255, 255, 255, 0.9);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: transparent;
   cursor: pointer;
 }
 
