@@ -18,13 +18,15 @@
       @wheel="onWheelZoom"
     >
       <div class="map-layer" :style="mapLayerStyle">
-        <img
-          class="home-image"
-          :src="mapaGta"
-          alt="Mapa interativo GTA"
-          draggable="false"
-          @load="onImageLoad"
-        />
+        <div class="map-container" :style="mapContainerStyle">
+          <img
+            class="home-image"
+            :src="mapaGta"
+            alt="Mapa interativo GTA"
+            draggable="false"
+            @load="onImageLoad"
+          />
+        </div>
 
         <div
           v-for="pin in pins"
@@ -72,6 +74,7 @@ import mapaGta from './assets/mapa-gta.webp'
 
 const MAX_ZOOM = 5
 const ZOOM_STEP = 0.1
+const EXTRA_SPACE = 1000 // 1000px de margem em cada lado
 
 const viewportRef = ref(null)
 const mapNaturalSize = ref({ width: 0, height: 0 })
@@ -85,12 +88,27 @@ const activePointerId = ref(null)
 const pointerCoords = ref({ x: null, y: null })
 const pins = ref([])
 const isImageLoaded = ref(false)
-const minZoom = ref(0.5) // Zoom mínimo maior para o mapa não ficar muito pequeno
+const minZoom = ref(0.5)
+
+// Tamanho total incluindo as margens
+const totalSize = computed(() => ({
+  width: mapNaturalSize.value.width + (EXTRA_SPACE * 2),
+  height: mapNaturalSize.value.height + (EXTRA_SPACE * 2)
+}))
+
+const mapContainerStyle = computed(() => ({
+  position: 'absolute',
+  left: `${EXTRA_SPACE}px`,
+  top: `${EXTRA_SPACE}px`,
+}))
 
 const mapLayerStyle = computed(() => ({
   transform: `translate(${offset.value.x}px, ${offset.value.y}px) scale(${zoom.value})`,
   transformOrigin: '0 0',
-  willChange: 'transform'
+  willChange: 'transform',
+  width: `${totalSize.value.width}px`,
+  height: `${totalSize.value.height}px`,
+  position: 'relative'
 }))
 
 const coordLabel = computed(() => {
@@ -102,33 +120,33 @@ const coordLabel = computed(() => {
 
 // Função que impede a imagem de sair da tela
 function clampOffset(nextOffset) {
-  const scaledWidth = mapNaturalSize.value.width * zoom.value
-  const scaledHeight = mapNaturalSize.value.height * zoom.value
+  const scaledWidth = totalSize.value.width * zoom.value
+  const scaledHeight = totalSize.value.height * zoom.value
   const { width: viewportWidth, height: viewportHeight } = viewportSize.value
 
   if (!scaledWidth || !scaledHeight || !viewportWidth || !viewportHeight) {
     return { x: 0, y: 0 }
   }
 
-  // Limites para manter a imagem dentro da tela
+  // Limites para manter a área total dentro da tela
   let minX, maxX, minY, maxY
   
   if (scaledWidth <= viewportWidth) {
-    // Se a imagem é menor que o viewport, centraliza
+    // Se a área total é menor que o viewport, centraliza
     minX = (viewportWidth - scaledWidth) / 2
     maxX = minX
   } else {
-    // Se a imagem é maior, limita para não sair da tela
+    // Se a área total é maior, limita para não sair da tela
     minX = viewportWidth - scaledWidth
     maxX = 0
   }
   
   if (scaledHeight <= viewportHeight) {
-    // Se a imagem é menor que o viewport, centraliza
+    // Se a área total é menor que o viewport, centraliza
     minY = (viewportHeight - scaledHeight) / 2
     maxY = minY
   } else {
-    // Se a imagem é maior, limita para não sair da tela
+    // Se a área total é maior, limita para não sair da tela
     minY = viewportHeight - scaledHeight
     maxY = 0
   }
@@ -141,12 +159,12 @@ function clampOffset(nextOffset) {
 
 // Função para centralizar o mapa na tela
 function centerMap() {
-  if (!mapNaturalSize.value.width || !mapNaturalSize.value.height || !viewportSize.value.width || !viewportSize.value.height) {
+  if (!totalSize.value.width || !totalSize.value.height || !viewportSize.value.width || !viewportSize.value.height) {
     return
   }
 
-  const scaledWidth = mapNaturalSize.value.width * zoom.value
-  const scaledHeight = mapNaturalSize.value.height * zoom.value
+  const scaledWidth = totalSize.value.width * zoom.value
+  const scaledHeight = totalSize.value.height * zoom.value
   
   offset.value = {
     x: (viewportSize.value.width - scaledWidth) / 2,
@@ -156,19 +174,19 @@ function centerMap() {
 
 // Função para ajustar o mapa ao viewport (zoom inicial)
 function fitMapToViewport() {
-  if (!mapNaturalSize.value.width || !mapNaturalSize.value.height || !viewportSize.value.width || !viewportSize.value.height) {
+  if (!totalSize.value.width || !totalSize.value.height || !viewportSize.value.width || !viewportSize.value.height) {
     return
   }
 
-  // Calcula o zoom que faz o mapa caber completamente no viewport
-  const scaleX = viewportSize.value.width / mapNaturalSize.value.width
-  const scaleY = viewportSize.value.height / mapNaturalSize.value.height
+  // Calcula o zoom que faz a área total caber completamente no viewport
+  const scaleX = viewportSize.value.width / totalSize.value.width
+  const scaleY = viewportSize.value.height / totalSize.value.height
   const fitZoom = Math.min(scaleX, scaleY)
   
   // Aplica o zoom, respeitando os limites
   zoom.value = Math.max(minZoom.value, Math.min(fitZoom, MAX_ZOOM))
   
-  // Centraliza o mapa
+  // Centraliza a área total
   centerMap()
 }
 
@@ -193,8 +211,9 @@ function updatePointerCoords(event) {
   }
 
   const rect = viewportRef.value.getBoundingClientRect()
-  const x = (event.clientX - rect.left - offset.value.x) / zoom.value
-  const y = (event.clientY - rect.top - offset.value.y) / zoom.value
+  // Ajusta as coordenadas considerando o offset da imagem dentro do container
+  const x = (event.clientX - rect.left - offset.value.x) / zoom.value - EXTRA_SPACE
+  const y = (event.clientY - rect.top - offset.value.y) / zoom.value - EXTRA_SPACE
 
   if (
     x < 0 ||
@@ -220,8 +239,11 @@ function onImageLoad(event) {
 }
 
 function getPinStyle(pin) {
-  const scaledX = pin.cord_x * zoom.value
-  const scaledY = pin.cord_y * zoom.value
+  // Ajusta a posição dos pins considerando as margens
+  const adjustedX = pin.cord_x + EXTRA_SPACE
+  const adjustedY = pin.cord_y + EXTRA_SPACE
+  const scaledX = adjustedX * zoom.value
+  const scaledY = adjustedY * zoom.value
   
   return {
     left: `${scaledX + offset.value.x}px`,
@@ -458,10 +480,8 @@ onUnmounted(() => {
   width: 100vw;
   height: 100vh;
   display: grid;
-  grid-template-rows: auto 1fr;
   gap: 0.75rem;
   margin: 0;
-  padding: 0.75rem;
   box-sizing: border-box;
   background: #728aaf;
   overflow: hidden;
@@ -565,10 +585,10 @@ onUnmounted(() => {
 }
 
 .map-layer {
-  position: relative;
   display: inline-block;
   transform-origin: 0 0;
   will-change: transform;
+  position: relative;
 }
 
 .map-pin {
