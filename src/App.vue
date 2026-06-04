@@ -248,8 +248,9 @@ function onImageLoad(event) {
   refreshViewportSize()
 }
 
+// Função otimizada para calcular o estilo do pin
 function getPinStyle(pin) {
-  // Posiciona o pin nas coordenadas absolutas da imagem
+  // Posiciona o pin nas coordenadas absolutas da imagem aplicando zoom e offset
   const scaledX = pin.cord_x * zoom.value
   const scaledY = pin.cord_y * zoom.value
   
@@ -303,7 +304,6 @@ async function loadPins() {
       .filter((pin) => Number.isFinite(pin.cord_x) && Number.isFinite(pin.cord_y))
     
     console.log('Pins carregados:', pins.value.length)
-    console.log('Pins:', pins.value)
   } catch (error) {
     console.error('Falha ao processar pins em /pins/tags.json', error)
     pins.value = []
@@ -610,6 +610,7 @@ onUnmounted(() => {
   font-size: 1rem;
   font-weight: bold;
   border: 2px solid white;
+  will-change: left, top; /* Otimiza a animação/atualização dos pins */
 }
 
 .map-pin__icon,
