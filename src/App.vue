@@ -73,7 +73,7 @@ import mapaGta from './assets/mapa-gta.webp'
 
 const MIN_ZOOM = 0.0001
 const MAX_ZOOM = 3
-const ZOOM_STEP = 0.2
+const ZOOM_STEP = 0.0002
 
 const viewportRef = ref(null)
 const mapNaturalSize = ref({ width: 0, height: 0 })
