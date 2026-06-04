@@ -253,12 +253,13 @@ function getPinStyle(pin) {
   // Posiciona o pin nas coordenadas absolutas da imagem aplicando zoom e offset
   const scaledX = pin.cord_x 
   const scaledY = pin.cord_y 
+  
   return {
     left: `${scaledX + offset.value.x}px`,
     top: `${scaledY + offset.value.y}px`,
     backgroundColor: pin.color_pin || '#ff4444',
     transform: 'translate(-50%, -50%)',
-    position: 'relative',
+    position: 'absolute',
     zIndex: 20
   }
 }
