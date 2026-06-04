@@ -88,7 +88,7 @@ const activePointerId = ref(null)
 const pointerCoords = ref({ x: null, y: null })
 const pins = ref([])
 const isImageLoaded = ref(false)
-const minZoom = ref(0.005)
+const minZoom = ref(0.05)
 
 // Tamanho total incluindo as margens
 const totalSize = computed(() => ({
