@@ -259,7 +259,7 @@ function getPinStyle(pin) {
     top: `${scaledY + offset.value.y}px`,
     backgroundColor: pin.color_pin || '#ff4444',
     transform: 'translate(-50%, -50%)',
-    position: 'absolute',
+    position: 'relative',
     zIndex: 20
   }
 }
