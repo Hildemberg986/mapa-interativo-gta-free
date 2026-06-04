@@ -262,12 +262,12 @@ function getPinStyle(pin) {
   const imageY = pin.centerY + (mapNaturalSize.value.height / 2)
   
   // Aplica zoom e offset para posicionar na tela
-  const scaledX = imageX * zoom.value
-  const scaledY = imageY * zoom.value
+  const scaledX = imageX 
+  const scaledY = imageY 
   
   return {
-    left: `${scaledX + offset.value.x}px`,
-    top: `${scaledY + offset.value.y}px`,
+    left: `${scaledX }px`,
+    top: `${scaledY }px`,
     backgroundColor: pin.color_pin || '#ff4444',
     transform: 'translate(-50%, -50%)',
     position: 'absolute',
