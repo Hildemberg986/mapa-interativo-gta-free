@@ -610,6 +610,7 @@ onUnmounted(() => {
   will-change: left, top;
   /* A ponta do marcador fica exatamente na coordenada */
   transform: translate(-50%, -100%);
+  cursor: pointer;
 }
 
 /* Corpo do marcador - formato de gota */
@@ -628,20 +629,6 @@ onUnmounted(() => {
   z-index: 1;
 }
 
-/* Círculo interno branco */
-.map-pin::after {
-  content: '';
-  position: absolute;
-  top: 0.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 1rem;
-  height: 1rem;
-  background-color: white;
-  border-radius: 50%;
-  z-index: 2;
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
-}
 
 /* Ícone/Imagem centralizado */
 .map-pin__icon,
