@@ -257,7 +257,7 @@ function getPinStyle(pin) {
   
   // Configurações ajustáveis
   const minPinSize = 0.4    // Tamanho mínimo do pin (40%)
-  const maxPinSize = 1.2    // Tamanho máximo do pin (120%)
+  const maxPinSize = 2    // Tamanho máximo do pin (120%)
   const baseSize = 0.7      // Tamanho base no zoom 1.0 (70%)
   
   // Calcula a escala baseada no zoom
