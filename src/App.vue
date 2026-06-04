@@ -70,7 +70,6 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import mapaGta from './assets/mapa-gta.webp'
 
-const MIN_ZOOM_SIZE = 50
 const MAX_ZOOM = 5
 const ZOOM_STEP = 0.1
 
@@ -86,7 +85,7 @@ const activePointerId = ref(null)
 const pointerCoords = ref({ x: null, y: null })
 const pins = ref([])
 const isImageLoaded = ref(false)
-const minZoom = ref(0.1)
+const minZoom = ref(0.5) // Zoom mínimo maior para o mapa não ficar muito pequeno
 
 const mapLayerStyle = computed(() => ({
   transform: `translate(${offset.value.x}px, ${offset.value.y}px) scale(${zoom.value})`,
@@ -101,7 +100,7 @@ const coordLabel = computed(() => {
   return `X: ${Math.round(pointerCoords.value.x)} | Y: ${Math.round(pointerCoords.value.y)}`
 })
 
-// Novo sistema de clamping que permite movimento 360° sem limites rígidos
+// Função que impede a imagem de sair da tela
 function clampOffset(nextOffset) {
   const scaledWidth = mapNaturalSize.value.width * zoom.value
   const scaledHeight = mapNaturalSize.value.height * zoom.value
@@ -111,50 +110,66 @@ function clampOffset(nextOffset) {
     return { x: 0, y: 0 }
   }
 
-  // Permite arrastar até que a borda da imagem esteja no centro do viewport
-  // Isso cria um efeito 360° onde a imagem pode ser movida completamente
-  let minX = viewportWidth - scaledWidth - (scaledWidth * 0.5)
-  let maxX = scaledWidth * 0.5
-  let minY = viewportHeight - scaledHeight - (scaledHeight * 0.5)
-  let maxY = scaledHeight * 0.5
-
-  // Para zoom baixo, permite movimento extra
+  // Limites para manter a imagem dentro da tela
+  let minX, maxX, minY, maxY
+  
   if (scaledWidth <= viewportWidth) {
+    // Se a imagem é menor que o viewport, centraliza
+    minX = (viewportWidth - scaledWidth) / 2
+    maxX = minX
+  } else {
+    // Se a imagem é maior, limita para não sair da tela
     minX = viewportWidth - scaledWidth
     maxX = 0
   }
   
   if (scaledHeight <= viewportHeight) {
+    // Se a imagem é menor que o viewport, centraliza
+    minY = (viewportHeight - scaledHeight) / 2
+    maxY = minY
+  } else {
+    // Se a imagem é maior, limita para não sair da tela
     minY = viewportHeight - scaledHeight
     maxY = 0
   }
 
   return {
-    x: nextOffset.x,
-    y: nextOffset.y
+    x: Math.min(Math.max(nextOffset.x, minX), maxX),
+    y: Math.min(Math.max(nextOffset.y, minY), maxY),
   }
 }
 
-// Função melhorada para ajustar o mapa ao viewport sem forçar centralização excessiva
+// Função para centralizar o mapa na tela
+function centerMap() {
+  if (!mapNaturalSize.value.width || !mapNaturalSize.value.height || !viewportSize.value.width || !viewportSize.value.height) {
+    return
+  }
+
+  const scaledWidth = mapNaturalSize.value.width * zoom.value
+  const scaledHeight = mapNaturalSize.value.height * zoom.value
+  
+  offset.value = {
+    x: (viewportSize.value.width - scaledWidth) / 2,
+    y: (viewportSize.value.height - scaledHeight) / 2,
+  }
+}
+
+// Função para ajustar o mapa ao viewport (zoom inicial)
 function fitMapToViewport() {
   if (!mapNaturalSize.value.width || !mapNaturalSize.value.height || !viewportSize.value.width || !viewportSize.value.height) {
     return
   }
 
+  // Calcula o zoom que faz o mapa caber completamente no viewport
   const scaleX = viewportSize.value.width / mapNaturalSize.value.width
   const scaleY = viewportSize.value.height / mapNaturalSize.value.height
   const fitZoom = Math.min(scaleX, scaleY)
   
+  // Aplica o zoom, respeitando os limites
   zoom.value = Math.max(minZoom.value, Math.min(fitZoom, MAX_ZOOM))
   
-  const scaledWidth = mapNaturalSize.value.width * zoom.value
-  const scaledHeight = mapNaturalSize.value.height * zoom.value
-  
-  // Centraliza apenas inicialmente
-  offset.value = {
-    x: (viewportSize.value.width - scaledWidth) / 2,
-    y: (viewportSize.value.height - scaledHeight) / 2,
-  }
+  // Centraliza o mapa
+  centerMap()
 }
 
 function refreshViewportSize() {
@@ -182,10 +197,10 @@ function updatePointerCoords(event) {
   const y = (event.clientY - rect.top - offset.value.y) / zoom.value
 
   if (
-    x < -mapNaturalSize.value.width * 0.1 ||
-    y < -mapNaturalSize.value.height * 0.1 ||
-    x > mapNaturalSize.value.width * 1.1 ||
-    y > mapNaturalSize.value.height * 1.1
+    x < 0 ||
+    y < 0 ||
+    x > mapNaturalSize.value.width ||
+    y > mapNaturalSize.value.height
   ) {
     pointerCoords.value = { x: null, y: null }
     return
@@ -199,8 +214,6 @@ function onImageLoad(event) {
     width: event.target.naturalWidth,
     height: event.target.naturalHeight,
   }
-  
-  minZoom.value = MIN_ZOOM_SIZE / mapNaturalSize.value.width
   
   isImageLoaded.value = true
   refreshViewportSize()
@@ -263,7 +276,6 @@ async function loadPins() {
   }
 }
 
-// Arrasto suave e livre
 function onPointerDown(event) {
   if (event.button !== 0) {
     return
@@ -276,7 +288,6 @@ function onPointerDown(event) {
   viewportRef.value?.setPointerCapture(event.pointerId)
   event.preventDefault()
   
-  // Estilo para cursor durante arrasto
   if (viewportRef.value) {
     viewportRef.value.style.cursor = 'grabbing'
   }
@@ -287,14 +298,13 @@ function onPointerMove(event) {
     return
   }
 
-  // Movimento livre em qualquer direção (360°)
   const deltaX = event.clientX - dragStartPoint.value.x
   const deltaY = event.clientY - dragStartPoint.value.y
 
-  offset.value = {
+  offset.value = clampOffset({
     x: dragStartOffset.value.x + deltaX,
     y: dragStartOffset.value.y + deltaY,
-  }
+  })
   
   updatePointerCoords(event)
   event.preventDefault()
@@ -331,7 +341,6 @@ function onMouseLeave() {
   }
 }
 
-// Zoom com ponto focal correto
 function setZoom(nextZoom, clientX = null, clientY = null) {
   if (!viewportRef.value) {
     return
@@ -353,10 +362,10 @@ function setZoom(nextZoom, clientX = null, clientY = null) {
     
     zoom.value = clampedZoom
     
-    offset.value = {
+    offset.value = clampOffset({
       x: mouseX - worldX * zoom.value,
       y: mouseY - worldY * zoom.value,
-    }
+    })
   } else {
     const centerX = viewportSize.value.width / 2
     const centerY = viewportSize.value.height / 2
@@ -365,10 +374,10 @@ function setZoom(nextZoom, clientX = null, clientY = null) {
     
     zoom.value = clampedZoom
     
-    offset.value = {
+    offset.value = clampOffset({
       x: centerX - worldX * zoom.value,
       y: centerY - worldY * zoom.value,
-    }
+    })
   }
 }
 
@@ -397,12 +406,11 @@ function onWheelZoom(event) {
   }
 }
 
-// Movimento com teclado em todas as direções
 function moveByKeyboard(deltaX, deltaY) {
-  offset.value = {
+  offset.value = clampOffset({
     x: offset.value.x + deltaX,
     y: offset.value.y + deltaY,
-  }
+  })
 }
 
 function onViewportKeydown(event) {
@@ -447,7 +455,8 @@ onUnmounted(() => {
 
 .home {
   position: relative;
-  min-height: 100vh;
+  width: 100vw;
+  height: 100vh;
   display: grid;
   grid-template-rows: auto 1fr;
   gap: 0.75rem;
@@ -459,6 +468,10 @@ onUnmounted(() => {
 }
 
 .hud {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 100;
   display: flex;
   justify-content: flex-end;
   align-items: center;
@@ -471,11 +484,12 @@ onUnmounted(() => {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
-  background: rgba(122, 122, 122, 0.2);
+  background: rgba(0, 0, 0, 0.7);
   padding: 0.5rem 1rem;
   border-radius: 0.35rem;
   font-family: monospace;
   pointer-events: none;
+  backdrop-filter: blur(4px);
 }
 
 .zoom-controls {
@@ -522,7 +536,6 @@ onUnmounted(() => {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  border: 6px solid #728aaf;
   border-radius: 0.35rem;
   background: #728aaf;
   cursor: grab;
