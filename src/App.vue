@@ -1,10 +1,79 @@
+<template>
+  <main class="home">
+    <div class="hud">
+      <p class="coords">{{ coordLabel }}</p>
+    </div>
+
+    <section
+      ref="viewportRef"
+      class="map-viewport"
+      :class="{ 'is-dragging': isDragging }"
+      aria-label="Área do mapa interativo"
+      tabindex="0"
+      @keydown="onViewportKeydown"
+      @pointerdown="onPointerDown"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointercancel="onPointerCancel"
+      @pointerleave="onMouseLeave"
+      @wheel="onWheelZoom"
+    >
+      <div class="map-layer" :style="mapLayerStyle">
+        <img
+          class="home-image"
+          :src="mapaGta"
+          alt="Mapa interativo GTA"
+          draggable="false"
+          @load="onImageLoad"
+        />
+
+        <div
+          v-for="pin in pins"
+          :key="pin.id"
+          class="map-pin"
+          :style="getPinStyle(pin)"
+          :title="`Pin ${pin.id}`"
+        >
+          <img
+            v-if="pin.image_url && pin.icon === ''"
+            class="map-pin__icon-image"
+            :src="pin.image_url"
+            alt=""
+            aria-hidden="true"
+          />
+          <span v-else class="map-pin__icon" aria-hidden="true">{{ pin.icon || '•' }}</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="zoom-controls">
+      <button
+        type="button"
+        aria-label="Diminuir zoom"
+        @click="zoomOut"
+        :disabled="zoom <= MIN_ZOOM"
+      >
+        -
+      </button>
+      <button
+        type="button"
+        aria-label="Aumentar zoom"
+        @click="zoomIn"
+        :disabled="zoom >= MAX_ZOOM"
+      >
+        +
+      </button>
+    </div>
+  </main>
+</template>
+
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue'
 import mapaGta from './assets/mapa-gta.webp'
 
-const MIN_ZOOM = 0.2
-const MAX_ZOOM = 8
-const ZOOM_STEP = 0.15
+const MIN_ZOOM = 1
+const MAX_ZOOM = 3
+const ZOOM_STEP = 0.2
 
 const viewportRef = ref(null)
 const mapNaturalSize = ref({ width: 0, height: 0 })
@@ -16,8 +85,10 @@ const dragStartPoint = ref({ x: 0, y: 0 })
 const dragStartOffset = ref({ x: 0, y: 0 })
 const activePointerId = ref(null)
 const pointerCoords = ref({ x: null, y: null })
+const pins = ref([])
+const isImageLoaded = ref(false)
 
-const mapStyle = computed(() => ({
+const mapLayerStyle = computed(() => ({
   transform: `translate(${offset.value.x}px, ${offset.value.y}px) scale(${zoom.value})`,
 }))
 
@@ -49,6 +120,27 @@ function clampOffset(nextOffset) {
   }
 }
 
+function fitMapToViewport() {
+  if (!mapNaturalSize.value.width || !mapNaturalSize.value.height || !viewportSize.value.width || !viewportSize.value.height) {
+    return
+  }
+
+  const scaleX = viewportSize.value.width / mapNaturalSize.value.width
+  const scaleY = viewportSize.value.height / mapNaturalSize.value.height
+  const fitZoom = Math.min(scaleX, scaleY, MAX_ZOOM)
+  
+  zoom.value = Math.max(MIN_ZOOM, Math.min(fitZoom, MAX_ZOOM))
+  
+  // Center the map
+  const scaledWidth = mapNaturalSize.value.width * zoom.value
+  const scaledHeight = mapNaturalSize.value.height * zoom.value
+  
+  offset.value = {
+    x: (viewportSize.value.width - scaledWidth) / 2,
+    y: (viewportSize.value.height - scaledHeight) / 2,
+  }
+}
+
 function refreshViewportSize() {
   if (!viewportRef.value) {
     return
@@ -59,8 +151,8 @@ function refreshViewportSize() {
     height: viewportRef.value.clientHeight,
   }
 
-  if (mapNaturalSize.value.width && mapNaturalSize.value.height) {
-    offset.value = clampOffset(offset.value)
+  if (mapNaturalSize.value.width && mapNaturalSize.value.height && isImageLoaded.value) {
+    fitMapToViewport()
   }
 }
 
@@ -91,8 +183,60 @@ function onImageLoad(event) {
     width: event.target.naturalWidth,
     height: event.target.naturalHeight,
   }
+  isImageLoaded.value = true
   refreshViewportSize()
-  applyInitialZoom()
+}
+
+function getPinStyle(pin) {
+  return {
+    left: `${pin.cord_x}px`,
+    top: `${pin.cord_y}px`,
+    backgroundColor: pin.color_pin || '#000000',
+  }
+}
+
+function normalizeText(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function normalizePin(pin, index) {
+  const normalizedIcon = normalizeText(pin?.icon)
+  const normalizedImageUrl = normalizeText(pin?.image_url)
+
+  return {
+    id: pin?.id ?? `pin-${index}`,
+    icon: normalizedIcon,
+    image_url: normalizedImageUrl,
+    cord_x: Number(pin?.cord_x),
+    cord_y: Number(pin?.cord_y),
+    color_pin: pin?.color_pin ?? '#000000',
+  }
+}
+
+async function loadPins() {
+  try {
+    const response = await fetch('/pins/tags.json')
+    if (!response.ok) {
+      console.error(`Falha ao carregar pins: ${response.status} ${response.statusText}`)
+      pins.value = []
+      return
+    }
+
+    const data = await response.json()
+    let rawPins = []
+    if (Array.isArray(data)) {
+      rawPins = data
+    } else if (Array.isArray(data?.pins)) {
+      rawPins = data.pins
+    }
+
+    pins.value = rawPins
+      .map(normalizePin)
+      .filter((pin) => Number.isFinite(pin.cord_x) && Number.isFinite(pin.cord_y))
+  } catch (error) {
+    console.error('Falha ao processar pins em /pins/tags.json', error)
+    pins.value = []
+  }
 }
 
 function onPointerDown(event) {
@@ -150,75 +294,64 @@ function onMouseLeave() {
   pointerCoords.value = { x: null, y: null }
 }
 
-function setZoom(nextZoom) {
+function setZoom(nextZoom, clientX = null, clientY = null) {
   if (!viewportRef.value) {
     return
   }
 
   const clampedZoom = Math.min(Math.max(nextZoom, MIN_ZOOM), MAX_ZOOM)
-  const centerX = viewportSize.value.width / 2
-  const centerY = viewportSize.value.height / 2
-  const worldX = (centerX - offset.value.x) / zoom.value
-  const worldY = (centerY - offset.value.y) / zoom.value
-
-  zoom.value = clampedZoom
-  offset.value = clampOffset({
-    x: centerX - worldX * zoom.value,
-    y: centerY - worldY * zoom.value,
-  })
-}
-
-function applyInitialZoom() {
-  if (
-    !viewportSize.value.width ||
-    !viewportSize.value.height ||
-    !mapNaturalSize.value.width ||
-    !mapNaturalSize.value.height
-  ) {
-    return
+  
+  // If specific point is provided (for wheel zoom), zoom around that point
+  if (clientX !== null && clientY !== null) {
+    const rect = viewportRef.value.getBoundingClientRect()
+    const x = clientX - rect.left
+    const y = clientY - rect.top
+    const worldX = (x - offset.value.x) / zoom.value
+    const worldY = (y - offset.value.y) / zoom.value
+    
+    zoom.value = clampedZoom
+    offset.value = clampOffset({
+      x: x - worldX * zoom.value,
+      y: y - worldY * zoom.value,
+    })
+  } else {
+    // Fallback to center zoom (for button clicks)
+    const centerX = viewportSize.value.width / 2
+    const centerY = viewportSize.value.height / 2
+    const worldX = (centerX - offset.value.x) / zoom.value
+    const worldY = (centerY - offset.value.y) / zoom.value
+    
+    zoom.value = clampedZoom
+    offset.value = clampOffset({
+      x: centerX - worldX * zoom.value,
+      y: centerY - worldY * zoom.value,
+    })
   }
-
-  const fitZoom = Math.min(
-    viewportSize.value.width / mapNaturalSize.value.width,
-    viewportSize.value.height / mapNaturalSize.value.height,
-  )
-
-  zoom.value = Math.min(Math.max(fitZoom, MIN_ZOOM), MAX_ZOOM)
-  offset.value = clampOffset({
-    x: (viewportSize.value.width - mapNaturalSize.value.width * zoom.value) / 2,
-    y: (viewportSize.value.height - mapNaturalSize.value.height * zoom.value) / 2,
-  })
 }
 
-function zoomIn() {
-  setZoom(zoom.value + ZOOM_STEP)
+function zoomIn(event) {
+  const clientX = event?.clientX ?? null
+  const clientY = event?.clientY ?? null
+  setZoom(zoom.value + ZOOM_STEP, clientX, clientY)
 }
 
-function zoomOut() {
-  setZoom(zoom.value - ZOOM_STEP)
+function zoomOut(event) {
+  const clientX = event?.clientX ?? null
+  const clientY = event?.clientY ?? null
+  setZoom(zoom.value - ZOOM_STEP, clientX, clientY)
 }
 
-function getZoomStepWithModifiers(event) {
-  if (event.shiftKey) {
-    return ZOOM_STEP * 2
-  }
-
-  if (event.ctrlKey || event.metaKey) {
-    return ZOOM_STEP * 0.8
-  }
-
-  if (event.altKey) {
-    return ZOOM_STEP * 0.5
-  }
-
-  return ZOOM_STEP
-}
-
-function onViewportWheel(event) {
+function onWheelZoom(event) {
   event.preventDefault()
-  const direction = event.deltaY < 0 ? 1 : -1
-  const zoomStep = getZoomStepWithModifiers(event)
-  setZoom(zoom.value + direction * zoomStep)
+  
+  // Determine zoom direction based on deltaY
+  if (event.deltaY < 0) {
+    // Scrolling up -> zoom in
+    zoomIn(event)
+  } else if (event.deltaY > 0) {
+    // Scrolling down -> zoom out
+    zoomOut(event)
+  }
 }
 
 function moveByKeyboard(deltaX, deltaY) {
@@ -249,6 +382,7 @@ function onViewportKeydown(event) {
 onMounted(() => {
   refreshViewportSize()
   window.addEventListener('resize', refreshViewportSize)
+  loadPins()
 })
 
 onUnmounted(() => {
@@ -256,59 +390,9 @@ onUnmounted(() => {
 })
 </script>
 
-<template>
-  <main class="home">
-    <div class="hud">
-      <p class="coords">{{ coordLabel }}</p>
-    </div>
-
-    <section
-      ref="viewportRef"
-      class="map-viewport"
-      :class="{ 'is-dragging': isDragging }"
-      aria-label="Área do mapa interativo"
-      tabindex="0"
-      @keydown="onViewportKeydown"
-      @pointerdown="onPointerDown"
-      @pointermove="onPointerMove"
-      @pointerup="onPointerUp"
-      @pointercancel="onPointerCancel"
-      @pointerleave="onMouseLeave"
-      @wheel.prevent="onViewportWheel"
-    >
-      <img
-        class="home-image"
-        :style="mapStyle"
-        :src="mapaGta"
-        alt="Mapa interativo GTA"
-        draggable="false"
-        @load="onImageLoad"
-      />
-    </section>
-
-    <div class="zoom-controls">
-      <button
-        type="button"
-        aria-label="Diminuir zoom"
-        @click="zoomOut"
-        :disabled="zoom <= MIN_ZOOM"
-      >
-        -
-      </button>
-      <button
-        type="button"
-        aria-label="Aumentar zoom"
-        @click="zoomIn"
-        :disabled="zoom >= MAX_ZOOM"
-      >
-        +
-      </button>
-    </div>
-  </main>
-</template>
-
 <style scoped>
 .home {
+  position: relative;
   min-height: 100vh;
   display: grid;
   grid-template-rows: auto 1fr;
@@ -327,40 +411,52 @@ onUnmounted(() => {
   color: #ffffff;
 }
 
-.zoom-controls {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.35rem;
-  border-radius: 0.5rem;
-  background: #000000;
-  z-index: 10;
-}
-
-.zoom-controls button {
-  border: 1px solid #ffffff;
-  border-radius: 0.35rem;
-  width: 2.2rem;
-  height: 2rem;
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: #ffffff;
-  background: transparent;
-  cursor: pointer;
-}
-
-.zoom-controls button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
 .coords {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 0.5rem 1rem;
+  border-radius: 0.35rem;
+  font-family: monospace;
+}
+
+.zoom-controls {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  z-index: 1000;
+}
+
+.zoom-controls button {
+  border: none;
+  border-radius: 0.5rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1.3rem;
+  font-weight: bold;
+  background: #000000;
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: all 0.2s ease;
+}
+
+.zoom-controls button:hover:not(:disabled) {
+  background: #333333;
+  transform: scale(1.05);
+}
+
+.zoom-controls button:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.zoom-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .map-viewport {
@@ -385,8 +481,44 @@ onUnmounted(() => {
   max-width: none;
   height: auto;
   display: block;
-  transform-origin: top left;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+.map-layer {
+  position: relative;
+  display: inline-block;
+  transform-origin: top left;
+}
+
+.map-pin {
+  position: absolute;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 50% 50% 50% 0;
+  transform: translate(-50%, -100%) rotate(-45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.map-pin__icon,
+.map-pin__icon-image {
+  transform: rotate(45deg);
+}
+
+.map-pin__icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.map-pin__icon-image {
+  width: 1rem;
+  height: 1rem;
+  object-fit: cover;
+  border-radius: 999px;
 }
 </style>
