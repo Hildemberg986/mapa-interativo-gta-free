@@ -251,9 +251,8 @@ function onImageLoad(event) {
 // Função otimizada para calcular o estilo do pin
 function getPinStyle(pin) {
   // Posiciona o pin nas coordenadas absolutas da imagem aplicando zoom e offset
-  const scaledX = pin.cord_x * zoom.value
-  const scaledY = pin.cord_y * zoom.value
-  
+  const scaledX = pin.cord_x 
+  const scaledY = pin.cord_y 
   return {
     left: `${scaledX + offset.value.x}px`,
     top: `${scaledY + offset.value.y}px`,
