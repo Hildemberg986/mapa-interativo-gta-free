@@ -70,7 +70,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import mapaGta from './assets/mapa-gta.webp'
 
-const MIN_ZOOM_SIZE = 100
+const MIN_ZOOM_SIZE = 50
 const MAX_ZOOM = 5
 const ZOOM_STEP = 0.1
 
