@@ -512,9 +512,9 @@ onUnmounted(() => {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  border: 6px solid #2f8fbd;
+  border: 6px solid #728aaf;
   border-radius: 0.35rem;
-  background: #2f8fbd;
+  background: #728aaf;
   cursor: grab;
   touch-action: none;
 }
