@@ -464,6 +464,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.75rem;
   color: #ffffff;
+  background-color: transparent;
 }
 
 .coords {
