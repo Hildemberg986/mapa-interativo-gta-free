@@ -51,7 +51,7 @@
         type="button"
         aria-label="Diminuir zoom"
         @click="zoomOut"
-        :disabled="zoom <= MIN_ZOOM"
+        :disabled="zoom <= minZoom"
       >
         -
       </button>
@@ -71,7 +71,9 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import mapaGta from './assets/mapa-gta.webp'
 
-const MIN_ZOOM = 0.5
+// Calcula o zoom mínimo baseado no tamanho da imagem original
+// Se a imagem tem largura original W, para ela ficar 100px, o zoom = 100 / W
+const MIN_ZOOM_SIZE = 100 // tamanho mínimo em pixels para a largura da imagem
 const MAX_ZOOM = 5
 const ZOOM_STEP = 0.1
 
@@ -87,6 +89,7 @@ const activePointerId = ref(null)
 const pointerCoords = ref({ x: null, y: null })
 const pins = ref([])
 const isImageLoaded = ref(false)
+const minZoom = ref(0.1)
 
 const mapLayerStyle = computed(() => ({
   transform: `translate(${offset.value.x}px, ${offset.value.y}px) scale(${zoom.value})`,
@@ -149,7 +152,7 @@ function fitMapToViewport() {
   const fitZoom = Math.min(scaleX, scaleY)
   
   // Aplica o zoom, respeitando os limites
-  zoom.value = Math.max(MIN_ZOOM, Math.min(fitZoom, MAX_ZOOM))
+  zoom.value = Math.max(minZoom.value, Math.min(fitZoom, MAX_ZOOM))
   
   // Centraliza o mapa
   const scaledWidth = mapNaturalSize.value.width * zoom.value
@@ -203,6 +206,11 @@ function onImageLoad(event) {
     width: event.target.naturalWidth,
     height: event.target.naturalHeight,
   }
+  
+  // Calcula o zoom mínimo baseado no tamanho da imagem original
+  // Para que a imagem fique com no mínimo MIN_ZOOM_SIZE pixels de largura
+  minZoom.value = MIN_ZOOM_SIZE / mapNaturalSize.value.width
+  
   isImageLoaded.value = true
   refreshViewportSize()
 }
@@ -264,6 +272,7 @@ function onPointerDown(event) {
     return
   }
 
+  event.preventDefault()
   isDragging.value = true
   activePointerId.value = event.pointerId
   dragStartPoint.value = { x: event.clientX, y: event.clientY }
@@ -319,7 +328,7 @@ function setZoom(nextZoom, clientX = null, clientY = null) {
     return
   }
 
-  const clampedZoom = Math.min(Math.max(nextZoom, MIN_ZOOM), MAX_ZOOM)
+  const clampedZoom = Math.min(Math.max(nextZoom, minZoom.value), MAX_ZOOM)
   
   if (clampedZoom === zoom.value) {
     return
@@ -367,7 +376,7 @@ function zoomIn(event) {
 }
 
 function zoomOut(event) {
-  const newZoom = Math.max(zoom.value - ZOOM_STEP, MIN_ZOOM)
+  const newZoom = Math.max(zoom.value - ZOOM_STEP, minZoom.value)
   const clientX = event?.clientX ?? null
   const clientY = event?.clientY ?? null
   setZoom(newZoom, clientX, clientY)
@@ -378,7 +387,7 @@ function onWheelZoom(event) {
   
   // Detecta direção do scroll
   const delta = event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP
-  const newZoom = Math.min(Math.max(zoom.value + delta, MIN_ZOOM), MAX_ZOOM)
+  const newZoom = Math.min(Math.max(zoom.value + delta, minZoom.value), MAX_ZOOM)
   
   if (newZoom !== zoom.value) {
     setZoom(newZoom, event.clientX, event.clientY)
@@ -422,6 +431,12 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+* {
+  /* Remove scrollbars globally for this component */
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .home {
   position: relative;
   min-height: 100vh;
@@ -432,6 +447,7 @@ onUnmounted(() => {
   padding: 0.75rem;
   box-sizing: border-box;
   background: #2f8fbd;
+  overflow: hidden; /* Remove scrollbars from main container */
 }
 
 .hud {
@@ -450,6 +466,7 @@ onUnmounted(() => {
   padding: 0.5rem 1rem;
   border-radius: 0.35rem;
   font-family: monospace;
+  pointer-events: none; /* Allows clicking through the coordinates */
 }
 
 .zoom-controls {
@@ -495,16 +512,21 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow: hidden; /* Remove scrollbars from viewport */
   border: 6px solid #2f8fbd;
   border-radius: 0.35rem;
   background: #2f8fbd;
   cursor: grab;
-  touch-action: none;
+  touch-action: none; /* Prevents default touch actions like scrolling */
 }
 
 .map-viewport.is-dragging {
   cursor: grabbing;
+}
+
+/* Ensure no scrollbars appear on any element */
+.map-viewport::-webkit-scrollbar {
+  display: none;
 }
 
 .home-image {
@@ -514,14 +536,17 @@ onUnmounted(() => {
   display: block;
   user-select: none;
   -webkit-user-drag: none;
+  pointer-events: none; /* Prevents image from interfering with drag */
 }
 
 .map-layer {
   position: relative;
   display: inline-block;
   transform-origin: top left;
+  pointer-events: none; /* Allows dragging through the layer */
 }
 
+/* Pins need to be clickable, so re-enable pointer events */
 .map-pin {
   position: absolute;
   width: 2.2rem;
@@ -533,7 +558,7 @@ onUnmounted(() => {
   justify-content: center;
   color: #ffffff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  pointer-events: none;
+  pointer-events: none; /* Keep pins non-interactive for dragging */
 }
 
 .map-pin__icon,
@@ -551,5 +576,12 @@ onUnmounted(() => {
   height: 1rem;
   object-fit: cover;
   border-radius: 999px;
+}
+
+/* Ensure body doesn't have scrollbars when using this component */
+:global(body) {
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
 }
 </style>
