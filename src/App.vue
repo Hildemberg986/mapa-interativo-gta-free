@@ -256,9 +256,9 @@ function getPinStyle(pin) {
   const imageY = pin.centerY + (mapNaturalSize.value.height / 2)
   
   // Configurações ajustáveis
-  const minPinSize = 0.4    // Tamanho mínimo do pin (40%)
-  const maxPinSize = 2    // Tamanho máximo do pin (120%)
-  const baseSize = 0.7      // Tamanho base no zoom 1.0 (70%)
+  const minPinSize = 0.4    // Tamanho mínimo do pin 
+  const maxPinSize = 5    // Tamanho máximo do pin
+  const baseSize = 1      // Tamanho base no zoom 1.0 
   
   // Calcula a escala baseada no zoom
   const rawScale = baseSize / zoom.value
