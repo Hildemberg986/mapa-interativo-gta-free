@@ -20,16 +20,17 @@
       @mousemove="onMouseMove"
     >
       <div class="map-layer" :style="mapLayerStyle">
-        <div class="map-container" :style="mapContainerStyle">
-          <img
-            class="home-image"
-            :src="mapaGta"
-            alt="Mapa interativo GTA"
-            draggable="false"
-            @load="onImageLoad"
-          />
-        </div>
+        <!-- Imagem do mapa -->
+        <img
+          class="home-image"
+          :src="mapaGta"
+          alt="Mapa interativo GTA"
+          draggable="false"
+          :style="imageStyle"
+          @load="onImageLoad"
+        />
 
+        <!-- Pins sobre a imagem -->
         <div
           v-for="pin in pins"
           :key="pin.id"
@@ -44,7 +45,7 @@
             alt=""
             aria-hidden="true"
           />
-          <span v-else class="map-pin__icon" aria-hidden="true">{{ pin.icon || '•' }}</span>
+          <span v-else class="map-pin__icon" aria-hidden="true">{{ pin.icon || '📍' }}</span>
         </div>
       </div>
     </section>
@@ -76,7 +77,6 @@ import mapaGta from './assets/mapa-gta.webp'
 
 const MAX_ZOOM = 5
 const ZOOM_STEP = 0.1
-const EXTRA_SPACE = 100000
 
 const viewportRef = ref(null)
 const mapNaturalSize = ref({ width: 0, height: 0 })
@@ -91,34 +91,32 @@ const pointerCoords = ref({ x: null, y: null })
 const lastValidCoords = ref({ x: 0, y: 0 })
 const pins = ref([])
 const isImageLoaded = ref(false)
-const minZoom = ref(0.08)
+const minZoom = ref(0.1)
 
-// Tamanho total incluindo as margens
-const totalSize = computed(() => ({
-  width: mapNaturalSize.value.width + (EXTRA_SPACE * 2),
-  height: mapNaturalSize.value.height + (EXTRA_SPACE * 2)
-}))
-
-const mapContainerStyle = computed(() => ({
-  position: 'absolute',
-  left: `${EXTRA_SPACE}px`,
-  top: `${EXTRA_SPACE}px`,
+// Estilo da imagem (sem container extra)
+const imageStyle = computed(() => ({
+  width: `${mapNaturalSize.value.width}px`,
+  height: `${mapNaturalSize.value.height}px`,
+  display: 'block',
+  pointerEvents: 'none'
 }))
 
 const mapLayerStyle = computed(() => ({
   transform: `translate(${offset.value.x}px, ${offset.value.y}px) scale(${zoom.value})`,
   transformOrigin: '0 0',
   willChange: 'transform',
-  width: `${totalSize.value.width}px`,
-  height: `${totalSize.value.height}px`,
-  position: 'relative'
+  position: 'relative',
+  width: `${mapNaturalSize.value.width}px`,
+  height: `${mapNaturalSize.value.height}px`
 }))
 
 // Coordenadas com origem no centro da imagem (0,0 no meio)
 const coordLabel = computed(() => {
   if (pointerCoords.value.x === null || pointerCoords.value.y === null) {
     // Mostra a última coordenada válida quando o mouse sai da imagem
-    return `X: ${Math.round(lastValidCoords.value.x)} | Y: ${Math.round(lastValidCoords.value.y)}`
+    const centerX = lastValidCoords.value.x - (mapNaturalSize.value.width / 2)
+    const centerY = lastValidCoords.value.y - (mapNaturalSize.value.height / 2)
+    return `X: ${Math.round(centerX)} | Y: ${Math.round(centerY)}`
   }
   // Converte para coordenadas com origem no centro
   const centerX = pointerCoords.value.x - (mapNaturalSize.value.width / 2)
@@ -128,33 +126,28 @@ const coordLabel = computed(() => {
 
 // Função que impede a imagem de sair da tela
 function clampOffset(nextOffset) {
-  const scaledWidth = totalSize.value.width * zoom.value
-  const scaledHeight = totalSize.value.height * zoom.value
+  const scaledWidth = mapNaturalSize.value.width * zoom.value
+  const scaledHeight = mapNaturalSize.value.height * zoom.value
   const { width: viewportWidth, height: viewportHeight } = viewportSize.value
 
   if (!scaledWidth || !scaledHeight || !viewportWidth || !viewportHeight) {
     return { x: 0, y: 0 }
   }
 
-  // Limites para manter a área total dentro da tela
   let minX, maxX, minY, maxY
   
   if (scaledWidth <= viewportWidth) {
-    // Se a área total é menor que o viewport, centraliza
     minX = (viewportWidth - scaledWidth) / 2
     maxX = minX
   } else {
-    // Se a área total é maior, limita para não sair da tela
     minX = viewportWidth - scaledWidth
     maxX = 0
   }
   
   if (scaledHeight <= viewportHeight) {
-    // Se a área total é menor que o viewport, centraliza
     minY = (viewportHeight - scaledHeight) / 2
     maxY = minY
   } else {
-    // Se a área total é maior, limita para não sair da tela
     minY = viewportHeight - scaledHeight
     maxY = 0
   }
@@ -167,12 +160,12 @@ function clampOffset(nextOffset) {
 
 // Função para centralizar o mapa na tela
 function centerMap() {
-  if (!totalSize.value.width || !totalSize.value.height || !viewportSize.value.width || !viewportSize.value.height) {
+  if (!mapNaturalSize.value.width || !mapNaturalSize.value.height || !viewportSize.value.width || !viewportSize.value.height) {
     return
   }
 
-  const scaledWidth = totalSize.value.width * zoom.value
-  const scaledHeight = totalSize.value.height * zoom.value
+  const scaledWidth = mapNaturalSize.value.width * zoom.value
+  const scaledHeight = mapNaturalSize.value.height * zoom.value
   
   offset.value = {
     x: (viewportSize.value.width - scaledWidth) / 2,
@@ -182,19 +175,16 @@ function centerMap() {
 
 // Função para ajustar o mapa ao viewport (zoom inicial)
 function fitMapToViewport() {
-  if (!totalSize.value.width || !totalSize.value.height || !viewportSize.value.width || !viewportSize.value.height) {
+  if (!mapNaturalSize.value.width || !mapNaturalSize.value.height || !viewportSize.value.width || !viewportSize.value.height) {
     return
   }
 
-  // Calcula o zoom que faz a área total caber completamente no viewport
-  const scaleX = viewportSize.value.width / totalSize.value.width
-  const scaleY = viewportSize.value.height / totalSize.value.height
+  const scaleX = viewportSize.value.width / mapNaturalSize.value.width
+  const scaleY = viewportSize.value.height / mapNaturalSize.value.height
   const fitZoom = Math.min(scaleX, scaleY)
   
-  // Aplica o zoom, respeitando os limites
   zoom.value = Math.max(minZoom.value, Math.min(fitZoom, MAX_ZOOM))
   
-  // Centraliza a área total
   centerMap()
 }
 
@@ -219,9 +209,8 @@ function updatePointerCoords(event) {
   }
 
   const rect = viewportRef.value.getBoundingClientRect()
-  // Ajusta as coordenadas considerando o offset da imagem dentro do container
-  const x = (event.clientX - rect.left - offset.value.x) / zoom.value - EXTRA_SPACE
-  const y = (event.clientY - rect.top - offset.value.y) / zoom.value - EXTRA_SPACE
+  const x = (event.clientX - rect.left - offset.value.x) / zoom.value
+  const y = (event.clientY - rect.top - offset.value.y) / zoom.value
 
   // Verifica se está dentro dos limites da imagem
   if (
@@ -233,7 +222,6 @@ function updatePointerCoords(event) {
     pointerCoords.value = { x, y }
     lastValidCoords.value = { x, y }
   } else {
-    // Mantém a última coordenada válida, mas marca como fora
     pointerCoords.value = { x: null, y: null }
   }
 }
@@ -261,18 +249,17 @@ function onImageLoad(event) {
 }
 
 function getPinStyle(pin) {
-  // Ajusta a posição dos pins considerando as margens
-  const adjustedX = pin.cord_x + EXTRA_SPACE
-  const adjustedY = pin.cord_y + EXTRA_SPACE
-  const scaledX = adjustedX * zoom.value
-  const scaledY = adjustedY * zoom.value
+  // Posiciona o pin nas coordenadas absolutas da imagem
+  const scaledX = pin.cord_x * zoom.value
+  const scaledY = pin.cord_y * zoom.value
   
   return {
     left: `${scaledX + offset.value.x}px`,
     top: `${scaledY + offset.value.y}px`,
-    backgroundColor: pin.color_pin || '#000000',
-    transform: 'translate(-50%, -100%) rotate(-45deg)',
-    position: 'absolute'
+    backgroundColor: pin.color_pin || '#ff4444',
+    transform: 'translate(-50%, -50%)',
+    position: 'absolute',
+    zIndex: 20
   }
 }
 
@@ -286,11 +273,11 @@ function normalizePin(pin, index) {
 
   return {
     id: pin?.id ?? `pin-${index}`,
-    icon: normalizedIcon || '•',
+    icon: normalizedIcon || '📍',
     image_url: normalizedImageUrl,
     cord_x: Number(pin?.cord_x),
     cord_y: Number(pin?.cord_y),
-    color_pin: pin?.color_pin ?? '#000000',
+    color_pin: pin?.color_pin ?? '#ff4444',
   }
 }
 
@@ -316,6 +303,7 @@ async function loadPins() {
       .filter((pin) => Number.isFinite(pin.cord_x) && Number.isFinite(pin.cord_y))
     
     console.log('Pins carregados:', pins.value.length)
+    console.log('Pins:', pins.value)
   } catch (error) {
     console.error('Falha ao processar pins em /pins/tags.json', error)
     pins.value = []
@@ -381,7 +369,6 @@ function onPointerCancel(event) {
 }
 
 function onMouseLeave() {
-  // Mantém a última coordenada válida quando o mouse sai da viewport
   pointerCoords.value = { x: null, y: null }
 }
 
@@ -502,7 +489,6 @@ onUnmounted(() => {
   width: 100vw;
   height: 100vh;
   display: grid;
-  gap: 0.75rem;
   margin: 0;
   box-sizing: border-box;
   background: #728aaf;
@@ -578,7 +564,6 @@ onUnmounted(() => {
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  border-radius: 0.35rem;
   background: #728aaf;
   cursor: grab;
   touch-action: none;
@@ -596,28 +581,24 @@ onUnmounted(() => {
   display: none;
 }
 
-.home-image {
-  width: auto;
-  max-width: none;
-  height: auto;
-  display: block;
-  user-select: none;
-  -webkit-user-drag: none;
-  pointer-events: none;
-}
-
 .map-layer {
-  display: inline-block;
+  position: relative;
   transform-origin: 0 0;
   will-change: transform;
+}
+
+.home-image {
+  display: block;
+  pointer-events: none;
   position: relative;
+  z-index: 1;
 }
 
 .map-pin {
   position: absolute;
-  width: 2.2rem;
-  height: 2.2rem;
-  border-radius: 50% 50% 50% 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -626,24 +607,23 @@ onUnmounted(() => {
   pointer-events: none;
   transition: transform 0.1s ease;
   z-index: 10;
+  font-size: 1rem;
+  font-weight: bold;
+  border: 2px solid white;
 }
 
 .map-pin__icon,
 .map-pin__icon-image {
-  transform: rotate(45deg);
-}
-
-.map-pin__icon {
-  font-size: 1rem;
-  line-height: 1;
-  font-weight: bold;
+  width: 1.2rem;
+  height: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .map-pin__icon-image {
-  width: 1rem;
-  height: 1rem;
   object-fit: cover;
-  border-radius: 999px;
+  border-radius: 50%;
 }
 
 :global(body) {
