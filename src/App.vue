@@ -272,17 +272,15 @@ function onPointerDown(event) {
     return
   }
 
-  event.preventDefault()
   isDragging.value = true
   activePointerId.value = event.pointerId
   dragStartPoint.value = { x: event.clientX, y: event.clientY }
   dragStartOffset.value = { ...offset.value }
   viewportRef.value?.setPointerCapture(event.pointerId)
+  event.preventDefault()
 }
 
 function onPointerMove(event) {
-  updatePointerCoords(event)
-
   if (!isDragging.value || event.pointerId !== activePointerId.value) {
     return
   }
@@ -294,6 +292,8 @@ function onPointerMove(event) {
     x: dragStartOffset.value.x + deltaX,
     y: dragStartOffset.value.y + deltaY,
   })
+  
+  updatePointerCoords(event)
   event.preventDefault()
 }
 
@@ -432,7 +432,6 @@ onUnmounted(() => {
 
 <style scoped>
 * {
-  /* Remove scrollbars globally for this component */
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
@@ -446,8 +445,8 @@ onUnmounted(() => {
   margin: 0;
   padding: 0.75rem;
   box-sizing: border-box;
-  background: #2f8fbd;
-  overflow: hidden; /* Remove scrollbars from main container */
+  background: #728aaf;
+  overflow: hidden;
 }
 
 .hud {
@@ -466,7 +465,7 @@ onUnmounted(() => {
   padding: 0.5rem 1rem;
   border-radius: 0.35rem;
   font-family: monospace;
-  pointer-events: none; /* Allows clicking through the coordinates */
+  pointer-events: none;
 }
 
 .zoom-controls {
@@ -512,19 +511,18 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   min-height: 0;
-  overflow: hidden; /* Remove scrollbars from viewport */
+  overflow: hidden;
   border: 6px solid #2f8fbd;
   border-radius: 0.35rem;
   background: #2f8fbd;
   cursor: grab;
-  touch-action: none; /* Prevents default touch actions like scrolling */
+  touch-action: none;
 }
 
 .map-viewport.is-dragging {
   cursor: grabbing;
 }
 
-/* Ensure no scrollbars appear on any element */
 .map-viewport::-webkit-scrollbar {
   display: none;
 }
@@ -536,17 +534,14 @@ onUnmounted(() => {
   display: block;
   user-select: none;
   -webkit-user-drag: none;
-  pointer-events: none; /* Prevents image from interfering with drag */
 }
 
 .map-layer {
   position: relative;
   display: inline-block;
   transform-origin: top left;
-  pointer-events: none; /* Allows dragging through the layer */
 }
 
-/* Pins need to be clickable, so re-enable pointer events */
 .map-pin {
   position: absolute;
   width: 2.2rem;
@@ -558,7 +553,7 @@ onUnmounted(() => {
   justify-content: center;
   color: #ffffff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  pointer-events: none; /* Keep pins non-interactive for dragging */
+  pointer-events: none;
 }
 
 .map-pin__icon,
@@ -578,7 +573,6 @@ onUnmounted(() => {
   border-radius: 999px;
 }
 
-/* Ensure body doesn't have scrollbars when using this component */
 :global(body) {
   overflow: hidden;
   margin: 0;
