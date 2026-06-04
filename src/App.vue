@@ -255,8 +255,8 @@ function getPinStyle(pin) {
   const scaledY = pin.cord_y 
   
   return {
-    left: `${scaledX + offset.value.x}px`,
-    top: `${scaledY + offset.value.y}px`,
+    left: `${scaledX}px`,
+    top: `${scaledY}px`,
     backgroundColor: pin.color_pin || '#ff4444',
     transform: 'translate(-50%, -50%)',
     position: 'absolute',
