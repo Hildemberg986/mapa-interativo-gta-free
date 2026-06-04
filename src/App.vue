@@ -68,12 +68,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, nextTick } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import mapaGta from './assets/mapa-gta.webp'
 
-const MIN_ZOOM = 0.0001
-const MAX_ZOOM = 3
-const ZOOM_STEP = 0.0002
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 5
+const ZOOM_STEP = 0.1
 
 const viewportRef = ref(null)
 const mapNaturalSize = ref({ width: 0, height: 0 })
@@ -109,10 +109,28 @@ function clampOffset(nextOffset) {
     return { x: 0, y: 0 }
   }
 
-  const minX = scaledWidth > viewportWidth ? viewportWidth - scaledWidth : (viewportWidth - scaledWidth) / 2
-  const maxX = scaledWidth > viewportWidth ? 0 : minX
-  const minY = scaledHeight > viewportHeight ? viewportHeight - scaledHeight : (viewportHeight - scaledHeight) / 2
-  const maxY = scaledHeight > viewportHeight ? 0 : minY
+  // Calculate bounds - imagem nunca pode sair da tela completamente
+  let minX, maxX, minY, maxY
+  
+  if (scaledWidth <= viewportWidth) {
+    // Se a imagem é menor que o viewport, centraliza
+    minX = (viewportWidth - scaledWidth) / 2
+    maxX = minX
+  } else {
+    // Se a imagem é maior, limita o arrasto para não sair da tela
+    minX = viewportWidth - scaledWidth
+    maxX = 0
+  }
+  
+  if (scaledHeight <= viewportHeight) {
+    // Se a imagem é menor que o viewport, centraliza
+    minY = (viewportHeight - scaledHeight) / 2
+    maxY = minY
+  } else {
+    // Se a imagem é maior, limita o arrasto para não sair da tela
+    minY = viewportHeight - scaledHeight
+    maxY = 0
+  }
 
   return {
     x: Math.min(Math.max(nextOffset.x, minX), maxX),
@@ -125,13 +143,15 @@ function fitMapToViewport() {
     return
   }
 
+  // Calcula o zoom que faz o mapa caber completamente no viewport
   const scaleX = viewportSize.value.width / mapNaturalSize.value.width
   const scaleY = viewportSize.value.height / mapNaturalSize.value.height
-  const fitZoom = Math.min(scaleX, scaleY, MAX_ZOOM)
+  const fitZoom = Math.min(scaleX, scaleY)
   
+  // Aplica o zoom, respeitando os limites
   zoom.value = Math.max(MIN_ZOOM, Math.min(fitZoom, MAX_ZOOM))
   
-  // Center the map
+  // Centraliza o mapa
   const scaledWidth = mapNaturalSize.value.width * zoom.value
   const scaledHeight = mapNaturalSize.value.height * zoom.value
   
@@ -301,27 +321,37 @@ function setZoom(nextZoom, clientX = null, clientY = null) {
 
   const clampedZoom = Math.min(Math.max(nextZoom, MIN_ZOOM), MAX_ZOOM)
   
-  // If specific point is provided (for wheel zoom), zoom around that point
+  if (clampedZoom === zoom.value) {
+    return
+  }
+  
+  // Se tem ponto específico (zoom do mouse), zooma em torno desse ponto
   if (clientX !== null && clientY !== null) {
     const rect = viewportRef.value.getBoundingClientRect()
-    const x = clientX - rect.left
-    const y = clientY - rect.top
-    const worldX = (x - offset.value.x) / zoom.value
-    const worldY = (y - offset.value.y) / zoom.value
+    const mouseX = clientX - rect.left
+    const mouseY = clientY - rect.top
     
+    // Ponto no mundo antes do zoom
+    const worldX = (mouseX - offset.value.x) / zoom.value
+    const worldY = (mouseY - offset.value.y) / zoom.value
+    
+    // Aplica o novo zoom
     zoom.value = clampedZoom
+    
+    // Calcula novo offset para manter o ponto do mouse na mesma posição
     offset.value = clampOffset({
-      x: x - worldX * zoom.value,
-      y: y - worldY * zoom.value,
+      x: mouseX - worldX * zoom.value,
+      y: mouseY - worldY * zoom.value,
     })
   } else {
-    // Fallback to center zoom (for button clicks)
+    // Zoom centralizado (para botões)
     const centerX = viewportSize.value.width / 2
     const centerY = viewportSize.value.height / 2
     const worldX = (centerX - offset.value.x) / zoom.value
     const worldY = (centerY - offset.value.y) / zoom.value
     
     zoom.value = clampedZoom
+    
     offset.value = clampOffset({
       x: centerX - worldX * zoom.value,
       y: centerY - worldY * zoom.value,
@@ -330,27 +360,28 @@ function setZoom(nextZoom, clientX = null, clientY = null) {
 }
 
 function zoomIn(event) {
+  const newZoom = Math.min(zoom.value + ZOOM_STEP, MAX_ZOOM)
   const clientX = event?.clientX ?? null
   const clientY = event?.clientY ?? null
-  setZoom(zoom.value + ZOOM_STEP, clientX, clientY)
+  setZoom(newZoom, clientX, clientY)
 }
 
 function zoomOut(event) {
+  const newZoom = Math.max(zoom.value - ZOOM_STEP, MIN_ZOOM)
   const clientX = event?.clientX ?? null
   const clientY = event?.clientY ?? null
-  setZoom(zoom.value - ZOOM_STEP, clientX, clientY)
+  setZoom(newZoom, clientX, clientY)
 }
 
 function onWheelZoom(event) {
   event.preventDefault()
   
-  // Determine zoom direction based on deltaY
-  if (event.deltaY < 0) {
-    // Scrolling up -> zoom in
-    zoomIn(event)
-  } else if (event.deltaY > 0) {
-    // Scrolling down -> zoom out
-    zoomOut(event)
+  // Detecta direção do scroll
+  const delta = event.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP
+  const newZoom = Math.min(Math.max(zoom.value + delta, MIN_ZOOM), MAX_ZOOM)
+  
+  if (newZoom !== zoom.value) {
+    setZoom(newZoom, event.clientX, event.clientY)
   }
 }
 
