@@ -100,7 +100,7 @@ const pins = ref([])
 const isImageLoaded = ref(false)
 const minZoom = ref(0.1)
 
-// Estilo da imagem (sem container extra)
+// Estilo da imagem
 const imageStyle = computed(() => ({
   width: `${mapNaturalSize.value.width}px`,
   height: `${mapNaturalSize.value.height}px`,
@@ -120,12 +120,10 @@ const mapLayerStyle = computed(() => ({
 // Coordenadas com origem no centro da imagem (0,0 no meio)
 const coordLabel = computed(() => {
   if (pointerCoords.value.x === null || pointerCoords.value.y === null) {
-    // Mostra a última coordenada válida quando o mouse sai da imagem
     const centerX = lastValidCoords.value.x - (mapNaturalSize.value.width / 2)
     const centerY = lastValidCoords.value.y - (mapNaturalSize.value.height / 2)
     return `X: ${Math.round(centerX)} | Y: ${Math.round(centerY)}`
   }
-  // Converte para coordenadas com origem no centro
   const centerX = pointerCoords.value.x - (mapNaturalSize.value.width / 2)
   const centerY = pointerCoords.value.y - (mapNaturalSize.value.height / 2)
   return `X: ${Math.round(centerX)} | Y: ${Math.round(centerY)}`
@@ -219,7 +217,6 @@ function updatePointerCoords(event) {
   const x = (event.clientX - rect.left - offset.value.x) / zoom.value
   const y = (event.clientY - rect.top - offset.value.y) / zoom.value
 
-  // Verifica se está dentro dos limites da imagem
   if (
     x >= 0 &&
     y >= 0 &&
@@ -245,7 +242,6 @@ function onImageLoad(event) {
     height: event.target.naturalHeight,
   }
   
-  // Centraliza o ponto (0,0) no meio da imagem
   lastValidCoords.value = {
     x: mapNaturalSize.value.width / 2,
     y: mapNaturalSize.value.height / 2
@@ -255,21 +251,17 @@ function onImageLoad(event) {
   refreshViewportSize()
 }
 
-// Função otimizada para calcular o estilo do pin
+// Função otimizada para calcular o estilo do pin - FORMATO GOTA
 function getPinStyle(pin) {
   // Converte a coordenada center (com origem no centro) para coordenada da imagem (canto superior esquerdo)
   const imageX = pin.centerX + (mapNaturalSize.value.width / 2)
   const imageY = pin.centerY + (mapNaturalSize.value.height / 2)
   
-  // Aplica zoom e offset para posicionar na tela
-  const scaledX = imageX 
-  const scaledY = imageY 
-  
   return {
-    left: `${scaledX }px`,
-    top: `${scaledY }px`,
-    backgroundColor: pin.color_pin || '#ff4444',
-    transform: 'translate(-50%, -50%)',
+    left: `${imageX}px`,
+    top: `${imageY}px`,
+    '--pin-color': pin.color_pin || '#ff4444',
+    transform: 'translate(-50%, -100%)',
     position: 'absolute',
     zIndex: 20
   }
@@ -287,7 +279,6 @@ function normalizePin(pin, index) {
     id: pin?.id ?? `pin-${index}`,
     icon: normalizedIcon || '📍',
     image_url: normalizedImageUrl,
-    // Armazena coordenadas com origem no centro da imagem (0,0 no meio)
     centerX: Number(pin?.cord_x),
     centerY: Number(pin?.cord_y),
     color_pin: pin?.color_pin ?? '#ff4444',
@@ -606,29 +597,77 @@ onUnmounted(() => {
   z-index: 1;
 }
 
+/* ========== PIN EM FORMATO DE GOTA ========== */
 .map-pin {
   position: absolute;
-  width: 2rem;
-  height: 2rem;
+  width: 2.5rem;
+  height: 3.5rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10;
+  will-change: left, top;
+  /* A ponta do marcador fica exatamente na coordenada */
+  transform: translate(-50%, -100%);
+}
+
+/* Corpo do marcador - formato de gota */
+.map-pin::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%) rotate(-45deg);
+  width: 2.5rem;
+  height: 2.5rem;
+  background-color: var(--pin-color, #ff4444);
+  border-radius: 50% 50% 50% 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  border: 2px solid white;
+  z-index: 1;
+}
+
+/* Círculo interno branco */
+.map-pin::after {
+  content: '';
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1rem;
+  height: 1rem;
+  background-color: white;
   border-radius: 50%;
+  z-index: 2;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Ícone/Imagem centralizado */
+.map-pin__icon,
+.map-pin__icon-image {
+  position: relative;
+  z-index: 3;
+  width: 1.2rem;
+  height: 1.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  pointer-events: none;
-  transition: transform 0.1s ease;
-  z-index: 10;
-  font-size: 1rem;
+  margin-top: 0.5rem;
   font-weight: bold;
-  border: 2px solid white;
-  will-change: left, top;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
-/* Rabinho do pin */
+.map-pin__icon-image {
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* Rabinho do pin - acima do marcador */
 .map-pin__tail {
   position: absolute;
-  bottom: -2.5rem;
+  top: -2.8rem;
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.85);
@@ -645,19 +684,18 @@ onUnmounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
-/* Seta do rabinho */
+/* Seta do rabinho apontando para baixo */
 .map-pin__tail::before {
   content: '';
   position: absolute;
-  top: -0.4rem;
+  bottom: -0.4rem;
   left: 50%;
   transform: translateX(-50%);
   border-left: 0.4rem solid transparent;
   border-right: 0.4rem solid transparent;
-  border-bottom: 0.4rem solid rgba(0, 0, 0, 0.85);
+  border-top: 0.4rem solid rgba(0, 0, 0, 0.85);
 }
 
-/* Mostra o rabinho quando o mouse passa por cima */
 .map-pin:hover .map-pin__tail {
   opacity: 1;
 }
@@ -666,20 +704,6 @@ onUnmounted(() => {
   font-family: monospace;
   font-weight: 600;
   color: #ffffff;
-}
-
-.map-pin__icon,
-.map-pin__icon-image {
-  width: 1.2rem;
-  height: 1.2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.map-pin__icon-image {
-  object-fit: cover;
-  border-radius: 50%;
 }
 
 :global(body) {
