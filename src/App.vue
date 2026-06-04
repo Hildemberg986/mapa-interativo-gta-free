@@ -251,15 +251,18 @@ function onImageLoad(event) {
   refreshViewportSize()
 }
 
-// Função para calcular o estilo do pin - FORMATO GOTA COM ESCALA INVERSA
 function getPinStyle(pin) {
-  // Converte a coordenada center (com origem no centro) para coordenada da imagem (canto superior esquerdo)
   const imageX = pin.centerX + (mapNaturalSize.value.width / 2)
   const imageY = pin.centerY + (mapNaturalSize.value.height / 2)
   
-  // Escala inversa: quando zoom aumenta, pin diminui
-  // Usamos 1/zoom para manter o tamanho visual constante
-  const pinScale = 1 / zoom.value
+  // Configurações ajustáveis
+  const minPinSize = 0.4    // Tamanho mínimo do pin (40%)
+  const maxPinSize = 1.2    // Tamanho máximo do pin (120%)
+  const baseSize = 0.7      // Tamanho base no zoom 1.0 (70%)
+  
+  // Calcula a escala baseada no zoom
+  const rawScale = baseSize / zoom.value
+  const pinScale = Math.min(Math.max(rawScale, minPinSize), maxPinSize)
   
   return {
     left: `${imageX}px`,
