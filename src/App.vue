@@ -36,7 +36,7 @@
           :key="pin.id"
           class="map-pin"
           :style="getPinStyle(pin)"
-          :title="`${pin.icon || pin.id}`"
+          :title="`${pin.type || pin.icon || pin.id}`"
         >
           <img
             v-if="pin.image_url && pin.image_url.trim() !== ''"
@@ -290,7 +290,7 @@ function normalizePin(pin, index) {
     centerX: Number(pin?.cord_x),
     centerY: Number(pin?.cord_y),
     color_pin: pin?.color_pin ?? '#ff4444',
-  }
+    type: pin?.type || ''
 }
 
 async function loadPins() {
