@@ -46,6 +46,13 @@
             aria-hidden="true"
           />
           <span v-else class="map-pin__icon" aria-hidden="true">{{ pin.icon || '📍' }}</span>
+          
+          <!-- Rabinho com as coordenadas -->
+          <div class="map-pin__tail">
+            <span class="map-pin__coordinates">
+              X: {{ pin.centerX }}, Y: {{ pin.centerY }}
+            </span>
+          </div>
         </div>
       </div>
     </section>
@@ -250,13 +257,17 @@ function onImageLoad(event) {
 
 // Função otimizada para calcular o estilo do pin
 function getPinStyle(pin) {
-  // Posiciona o pin nas coordenadas absolutas da imagem aplicando zoom e offset
-  const scaledX = pin.cord_x 
-  const scaledY = pin.cord_y 
+  // Converte a coordenada center (com origem no centro) para coordenada da imagem (canto superior esquerdo)
+  const imageX = pin.centerX + (mapNaturalSize.value.width / 2)
+  const imageY = pin.centerY + (mapNaturalSize.value.height / 2)
+  
+  // Aplica zoom e offset para posicionar na tela
+  const scaledX = imageX * zoom.value
+  const scaledY = imageY * zoom.value
   
   return {
-    left: `${scaledX}px`,
-    top: `${scaledY}px`,
+    left: `${scaledX + offset.value.x}px`,
+    top: `${scaledY + offset.value.y}px`,
     backgroundColor: pin.color_pin || '#ff4444',
     transform: 'translate(-50%, -50%)',
     position: 'absolute',
@@ -276,8 +287,9 @@ function normalizePin(pin, index) {
     id: pin?.id ?? `pin-${index}`,
     icon: normalizedIcon || '📍',
     image_url: normalizedImageUrl,
-    cord_x: Number(pin?.cord_x),
-    cord_y: Number(pin?.cord_y),
+    // Armazena coordenadas com origem no centro da imagem (0,0 no meio)
+    centerX: Number(pin?.cord_x),
+    centerY: Number(pin?.cord_y),
     color_pin: pin?.color_pin ?? '#ff4444',
   }
 }
@@ -301,7 +313,7 @@ async function loadPins() {
 
     pins.value = rawPins
       .map(normalizePin)
-      .filter((pin) => Number.isFinite(pin.cord_x) && Number.isFinite(pin.cord_y))
+      .filter((pin) => Number.isFinite(pin.centerX) && Number.isFinite(pin.centerY))
     
     console.log('Pins carregados:', pins.value.length)
   } catch (error) {
@@ -610,7 +622,50 @@ onUnmounted(() => {
   font-size: 1rem;
   font-weight: bold;
   border: 2px solid white;
-  will-change: left, top; /* Otimiza a animação/atualização dos pins */
+  will-change: left, top;
+}
+
+/* Rabinho do pin */
+.map-pin__tail {
+  position: absolute;
+  bottom: -2.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  white-space: nowrap;
+  font-size: 0.7rem;
+  font-weight: normal;
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Seta do rabinho */
+.map-pin__tail::before {
+  content: '';
+  position: absolute;
+  top: -0.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 0.4rem solid transparent;
+  border-right: 0.4rem solid transparent;
+  border-bottom: 0.4rem solid rgba(0, 0, 0, 0.85);
+}
+
+/* Mostra o rabinho quando o mouse passa por cima */
+.map-pin:hover .map-pin__tail {
+  opacity: 1;
+}
+
+.map-pin__coordinates {
+  font-family: monospace;
+  font-weight: 600;
+  color: #ffffff;
 }
 
 .map-pin__icon,
