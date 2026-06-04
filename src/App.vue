@@ -16,6 +16,8 @@
       @pointerup="onPointerUp"
       @pointercancel="onPointerCancel"
       @wheel="onWheelZoom"
+      @mouseleave="onMouseLeave"
+      @mousemove="onMouseMove"
     >
       <div class="map-layer" :style="mapLayerStyle">
         <div class="map-container" :style="mapContainerStyle">
@@ -33,10 +35,10 @@
           :key="pin.id"
           class="map-pin"
           :style="getPinStyle(pin)"
-          :title="`Pin ${pin.id}`"
+          :title="`${pin.icon || pin.id}`"
         >
           <img
-            v-if="pin.image_url && pin.icon === ''"
+            v-if="pin.image_url && pin.image_url.trim() !== ''"
             class="map-pin__icon-image"
             :src="pin.image_url"
             alt=""
@@ -86,9 +88,10 @@ const dragStartPoint = ref({ x: 0, y: 0 })
 const dragStartOffset = ref({ x: 0, y: 0 })
 const activePointerId = ref(null)
 const pointerCoords = ref({ x: null, y: null })
+const lastValidCoords = ref({ x: 0, y: 0 })
 const pins = ref([])
 const isImageLoaded = ref(false)
-const minZoom = ref(0.05)
+const minZoom = ref(0.08)
 
 // Tamanho total incluindo as margens
 const totalSize = computed(() => ({
@@ -111,11 +114,16 @@ const mapLayerStyle = computed(() => ({
   position: 'relative'
 }))
 
+// Coordenadas com origem no centro da imagem (0,0 no meio)
 const coordLabel = computed(() => {
   if (pointerCoords.value.x === null || pointerCoords.value.y === null) {
-    return 'X: -- | Y: --'
+    // Mostra a última coordenada válida quando o mouse sai da imagem
+    return `X: ${Math.round(lastValidCoords.value.x)} | Y: ${Math.round(lastValidCoords.value.y)}`
   }
-  return `X: ${Math.round(pointerCoords.value.x)} | Y: ${Math.round(pointerCoords.value.y)}`
+  // Converte para coordenadas com origem no centro
+  const centerX = pointerCoords.value.x - (mapNaturalSize.value.width / 2)
+  const centerY = pointerCoords.value.y - (mapNaturalSize.value.height / 2)
+  return `X: ${Math.round(centerX)} | Y: ${Math.round(centerY)}`
 })
 
 // Função que impede a imagem de sair da tela
@@ -206,7 +214,7 @@ function refreshViewportSize() {
 }
 
 function updatePointerCoords(event) {
-  if (!viewportRef.value) {
+  if (!viewportRef.value || !isImageLoaded.value) {
     return
   }
 
@@ -215,23 +223,37 @@ function updatePointerCoords(event) {
   const x = (event.clientX - rect.left - offset.value.x) / zoom.value - EXTRA_SPACE
   const y = (event.clientY - rect.top - offset.value.y) / zoom.value - EXTRA_SPACE
 
+  // Verifica se está dentro dos limites da imagem
   if (
-    x < 0 ||
-    y < 0 ||
-    x > mapNaturalSize.value.width ||
-    y > mapNaturalSize.value.height
+    x >= 0 &&
+    y >= 0 &&
+    x <= mapNaturalSize.value.width &&
+    y <= mapNaturalSize.value.height
   ) {
+    pointerCoords.value = { x, y }
+    lastValidCoords.value = { x, y }
+  } else {
+    // Mantém a última coordenada válida, mas marca como fora
     pointerCoords.value = { x: null, y: null }
-    return
   }
+}
 
-  pointerCoords.value = { x, y }
+function onMouseMove(event) {
+  if (!isDragging.value) {
+    updatePointerCoords(event)
+  }
 }
 
 function onImageLoad(event) {
   mapNaturalSize.value = {
     width: event.target.naturalWidth,
     height: event.target.naturalHeight,
+  }
+  
+  // Centraliza o ponto (0,0) no meio da imagem
+  lastValidCoords.value = {
+    x: mapNaturalSize.value.width / 2,
+    y: mapNaturalSize.value.height / 2
   }
   
   isImageLoaded.value = true
@@ -264,7 +286,7 @@ function normalizePin(pin, index) {
 
   return {
     id: pin?.id ?? `pin-${index}`,
-    icon: normalizedIcon,
+    icon: normalizedIcon || '•',
     image_url: normalizedImageUrl,
     cord_x: Number(pin?.cord_x),
     cord_y: Number(pin?.cord_y),
@@ -292,6 +314,8 @@ async function loadPins() {
     pins.value = rawPins
       .map(normalizePin)
       .filter((pin) => Number.isFinite(pin.cord_x) && Number.isFinite(pin.cord_y))
+    
+    console.log('Pins carregados:', pins.value.length)
   } catch (error) {
     console.error('Falha ao processar pins em /pins/tags.json', error)
     pins.value = []
@@ -357,10 +381,8 @@ function onPointerCancel(event) {
 }
 
 function onMouseLeave() {
+  // Mantém a última coordenada válida quando o mouse sai da viewport
   pointerCoords.value = { x: null, y: null }
-  if (isDragging.value) {
-    stopDragging()
-  }
 }
 
 function setZoom(nextZoom, clientX = null, clientY = null) {
@@ -603,6 +625,7 @@ onUnmounted(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   pointer-events: none;
   transition: transform 0.1s ease;
+  z-index: 10;
 }
 
 .map-pin__icon,
@@ -613,6 +636,7 @@ onUnmounted(() => {
 .map-pin__icon {
   font-size: 1rem;
   line-height: 1;
+  font-weight: bold;
 }
 
 .map-pin__icon-image {
