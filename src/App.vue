@@ -605,7 +605,6 @@ onUnmounted(() => {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  pointer-events: none;
   z-index: 10;
   will-change: left, top;
   /* A ponta do marcador fica exatamente na coordenada */
@@ -649,6 +648,38 @@ onUnmounted(() => {
 .map-pin__icon-image {
   object-fit: cover;
   border-radius: 50%;
+}
+
+/* Rabinho do pin - acima do marcador */
+.map-pin__tail {
+  position: absolute;
+  top: -2.8rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  white-space: nowrap;
+  font-size: 0.7rem;
+  font-weight: normal;
+  pointer-events: none;
+  z-index: 15;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Seta do rabinho apontando para baixo */
+.map-pin__tail::before {
+  content: '';
+  position: absolute;
+  bottom: -0.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 0.4rem solid transparent;
+  border-right: 0.4rem solid transparent;
+  border-top: 0.4rem solid rgba(0, 0, 0, 0.85);
 }
 
 .map-pin:hover .map-pin__tail {
