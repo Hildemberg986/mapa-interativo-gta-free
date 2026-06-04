@@ -251,17 +251,22 @@ function onImageLoad(event) {
   refreshViewportSize()
 }
 
-// Função otimizada para calcular o estilo do pin - FORMATO GOTA
+// Função para calcular o estilo do pin - FORMATO GOTA COM ESCALA INVERSA
 function getPinStyle(pin) {
   // Converte a coordenada center (com origem no centro) para coordenada da imagem (canto superior esquerdo)
   const imageX = pin.centerX + (mapNaturalSize.value.width / 2)
   const imageY = pin.centerY + (mapNaturalSize.value.height / 2)
   
+  // Escala inversa: quando zoom aumenta, pin diminui
+  // Usamos 1/zoom para manter o tamanho visual constante
+  const pinScale = 1 / zoom.value
+  
   return {
     left: `${imageX}px`,
     top: `${imageY}px`,
     '--pin-color': pin.color_pin || '#ff4444',
-    transform: 'translate(-50%, -100%)',
+    '--pin-scale': pinScale,
+    transform: `translate(-50%, -100%) scale(${pinScale})`,
     position: 'absolute',
     zIndex: 20
   }
@@ -597,19 +602,20 @@ onUnmounted(() => {
   z-index: 1;
 }
 
-/* ========== PIN EM FORMATO DE GOTA ========== */
+/* ========== PIN EM FORMATO DE GOTA COM ESCALA INVERSA ========== */
 .map-pin {
   position: absolute;
   width: 2.5rem;
-  height: 3.5rem;
+  height: 3.25rem;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   z-index: 10;
   will-change: left, top;
   /* A ponta do marcador fica exatamente na coordenada */
-  transform: translate(-50%, -100%);
+  transform: translate(-50%, -100%) scale(var(--pin-scale, 1));
   cursor: pointer;
+  transform-origin: bottom center;
 }
 
 /* Corpo do marcador - formato de gota */
@@ -627,7 +633,6 @@ onUnmounted(() => {
   border: 2px solid white;
   z-index: 1;
 }
-
 
 /* Ícone/Imagem centralizado */
 .map-pin__icon,
