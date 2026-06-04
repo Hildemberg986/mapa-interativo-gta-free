@@ -292,6 +292,7 @@ function normalizePin(pin, index) {
     color_pin: pin?.color_pin ?? '#ff4444',
     type: pin?.type || ''
 }
+}
 
 async function loadPins() {
   try {
